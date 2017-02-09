@@ -34,12 +34,12 @@
 * bash-completion
 
 # Installation
-1. `git clone`
+* `git clone`
 ```console
 $ git clone https://github.com/itmst71/cda.git
 ```
 
-2. `source cda.sh` in `~/.bashrc` or `~/.zshrc`
+* `source cda.sh` in `~/.bashrc` or `~/.zshrc`
 ```bash
 [[ -f "/path/to/cda/cda.sh" ]] && . /path/to/cda/cda.sh
 ```
@@ -47,38 +47,38 @@ $ git clone https://github.com/itmst71/cda.git
 # Usage
 ## Entry Level
 ### Basic Options
-1. `-a` `--add` adds an alias.
+* `-a` `--add` adds an alias.
 ```console
 $ cda -a foo /baz/bar/foo
 ```
 
-2. Execute `cd` with an alias name.
+* Execute `cd` with an alias name.
 ```console
 $ cda foo
 $ pwd
 /baz/bar/foo
 ```
 
-3. `cda` accepts incomplete alias names if they are unique in forward match search.
+* `cda` accepts incomplete alias names if they are unique in forward match search.
 ```console
 $ cda f
 $ pwd
 /baz/bar/foo
 ```
 
-4. Complement alias name with `TAB` key.
+* Complement alias name with `TAB` key.
 ```console
 $ cda f<TAB>
 $ cda foo
 ```
 
-5. `-l` `--list` shows the list.
+* `-l` `--list` shows the list.
 ```console
 $ cda -l
 foo         /baz/bar/foo
 ```
 
-6. Omitting the path when adding, the current directory will be used.
+* Omitting the path when adding, the current directory will be used.
 ```console
 $ pwd
 /baz/bar
@@ -88,26 +88,26 @@ bar         /baz/bar
 foo         /baz/bar/foo
 ```
 
-7. `-r` `--remove` removes an alias.
+* `-r` `--remove` removes an alias.
 ```console
 $ cda -r bar
 $ cda -l
 foo         /baz/bar/foo
 ```
 
-8. `-e` `--edit` opens the list in a text editor.
+* `-e` `--edit` opens the list in a text editor.
 ```console
 $ cda -e
 ```
 
-9. `-h` `--help` shows basic help. `-H` `--help-full` shows full help with `less`.
+* `-h` `--help` shows basic help. `-H` `--help-full` shows full help with `less`.
 ```console
 $ cda -h
 ```
 
 ## Basic Level
 ### External Interactive Filter
-1. You can use external interactive filter commands to select an alias name.  
+* You can use external interactive filter commands to select an alias name.  
 By default, multiple filter command names separated by colons are set to the variable `CDA_CMD_FILTER`.  
 The first available command will be used.
 ```console
@@ -119,7 +119,7 @@ This value can be changed in the configuration file `~/.cda/config`.
 $ cda --config
 ```
 
-2. If no alias name is given, the entire list is passed to the filter.
+* If no alias name is given, the entire list is passed to the filter.
 ```console
 $ cda
 QUERY>                                       (1/5) [1/1]
@@ -130,7 +130,7 @@ foo2        /qux/baz/bar/foo
 foo2_2      /quux/qux/baz/bar/foo
 ```
 
-3. If the specified alias name matches multiple aliases, only those are passed to the filter.
+* If the specified alias name matches multiple aliases, only those are passed to the filter.
 ```console
 $ cda f
 QUERY>                                       (1/3) [1/1]
@@ -139,14 +139,14 @@ foo2        /qux/baz/bar/foo
 foo2_2      /quux/qux/baz/bar/foo 
 ```
         
-4. If there is an exact match alias, it will be used.
+* If there is an exact match alias, it will be used.
 ```console
 $ cda foo2
 $ pwd
 /qux/baz/bar/foo
 ```
 
-5. `-f` `--filter` forces to use the filter even if there is an exact match alias.
+* `-f` `--filter` forces to use the filter even if there is an exact match alias.
 ```console
 $ cda foo2 -f
 QUERY>                                       (1/2) [1/1]
@@ -154,7 +154,7 @@ foo2        /qux/baz/bar/foo
 foo2_2      /quux/qux/baz/bar/foo
 ```
 
-6. `-F` `--cmd-filter` can override `CDA_CMD_FILTER` variable.
+* `-F` `--cmd-filter` can override `CDA_CMD_FILTER` variable.
 ```console
 $ cda -F fzf
   foo2_2      /quux/qux/baz/bar/foo
@@ -167,7 +167,7 @@ $ cda -F fzf
 ```
 
 ### Internal Filter
-1. `cda` itself also has the simple non-interactive filter.  
+* `cda` itself also has the simple non-interactive filter.  
 ***The first argument is always used for forward match searches.***
 ```console
 $ cda -l
@@ -182,7 +182,7 @@ $ cda -l b
 bbcefg1       /qux/baz/bar/foo7
 ```
 
-2. The second and subsequent arguments are used for unordered partial AND match search after forward match search with the first argument.
+* The second and subsequent arguments are used for unordered partial AND match search after forward match search with the first argument.
 ```console
 $ cda -l a f
 abcefg1       /qux/baz/bar/foo1
@@ -199,12 +199,12 @@ $ pwd
 
 ## Intermediate Level
 ### Pipe
-1. `cda` supports pipe input. But note that ***`cd` via a pipe works only in `Zsh`***.  
+* `cda` supports pipe input. But note that ***`cd` via a pipe works only in `Zsh`***.  
 ```console
 $ echo foo | cda      # works in Zsh only
 ```
 
-2. Functions that do not need to be executed in the current shell also work in `Bash`.
+* Functions that do not need to be executed in the current shell also work in `Bash`.
 ```console
 $ printf -- "%s\n" -a foo /baz/bar/foo | cda  # add an alias
 $ echo foo | cda -p                           # print the path
@@ -212,16 +212,16 @@ $ echo foo | cda -p                           # print the path
 ```
 
 ### List Files
-1. `cda` can easily switch multiple list files being in `~/.cda/lists`.
+* `cda` can easily switch multiple list files being in `~/.cda/lists`.
 
-2. `-L` `--list-files` shows the list files.
+* `-L` `--list-files` shows the list files.
 ```console
 $ cda -L
 * default
   mylist
 ```
 
-3. `-U` `--use` switches the list file to use by default.  
+* `-U` `--use` switches the list file to use by default.  
 If the list specified does not exist, it will be created.
 ```console
 $ cda -U mylist
@@ -231,7 +231,7 @@ $ cda -L
 * mylist
 ```
 
-4. `-u` `--use-temp` temporarily switches the list file to use.
+* `-u` `--use-temp` temporarily switches the list file to use.
 ```console
 $ cda -a foo /baz/bar/foo
 $ cda -a foo /qux/baz/bar/foo -u mylist
@@ -243,7 +243,7 @@ $ pwd
 /baz/bar/foo
 ```
 
-5. `-R` `--remove-list` removes the specified list file.
+* `-R` `--remove-list` removes the specified list file.
 ```console
 $ cda -R mylist
 $ cda -L
@@ -251,25 +251,25 @@ $ cda -L
 ```
 
 ### Open Command
-1. `-o` `--open` opens the alias path with a file manager or something.
+* `-o` `--open` opens the alias path with a file manager or something.
 ```console
 $ cda -o foo2_2
 ```
 
-2. By default, multiple open command names separated by colons are set to the variable `CDA_CMD_OPEN`.  
+* By default, multiple open command names separated by colons are set to the variable `CDA_CMD_OPEN`.  
 The first available command will be used.
 ```console
 CDA_CMD_OPEN=xdg-open:open:ranger:mc
 ```
 
-3. `-O` `--cmd-open` can override `CDA_CMD_OPEN` value.
+* `-O` `--cmd-open` can override `CDA_CMD_OPEN` value.
 ```console
 $ cda foo -oO ranger
 ```
 
 ## Advanced Level
 ### Subdirectory Mode
-1. Accepts the directory path if a filter is available.   
+* Accepts the directory path if a filter is available.   
 Assigns numbers to subdirectories in the argument directory and passes them to the filter.  
 So you can narrow them down to `cd` by number.
 ```console
@@ -284,13 +284,13 @@ QUERY>                                       (1/7) [1/1]
 #6       日本語
 ```
 
-2. If the argument does not contain a hint that it is a file path like `/` or `.`, it will be treated as an alias name.  
+* If the argument does not contain a hint that it is a file path like `/` or `.`, it will be treated as an alias name.  
 So to specify a relative path in the current directory, do as follows.
 ```console
 $ cda ./foo
 ```
 
-3. `-s` `--subdir` invokes the subdirectory mode with an alias name.
+* `-s` `--subdir` invokes the subdirectory mode with an alias name.
 ```console
 $ cda -s foo
 QUERY>                                       (1/4) [1/1]
@@ -300,7 +300,7 @@ QUERY>                                       (1/4) [1/1]
 #3       subdir3_of_foo
 ```
 
-4. `-s` `--subdir` is equivalent to following 2 examples
+* `-s` `--subdir` is equivalent to following 2 examples
 ```console
 $ cda foo
 $ cda .
@@ -320,14 +320,14 @@ QUERY>                                       (1/4) [1/1]
 #3       subdir3_of_foo
 ```
 
-5. If you specify a subdirectory number with the second argument, you can confirm the selection without the filter.
+* If you specify a subdirectory number with the second argument, you can confirm the selection without the filter.
 ```console
 $ cda ./troublesome_names_for_input 2
 $ pwd
 /home/user/troublesome_names_for_input/Հայերեն
 ```
 
-6. If you invoke the subdirectory mode with `-s` `--subdir`, specify a number with `-n` `--number`.
+* If you invoke the subdirectory mode with `-s` `--subdir`, specify a number with `-n` `--number`.
 ```console
 $ cda -s troublesome -n 6
 $ pwd
@@ -335,12 +335,12 @@ $ pwd
 ```
 
 ### Auto-Alias for Terminal Multiplexer
-1. When `cd` in `tmux` or `GNU screen` session, alias is automatically added / removed using session name, window number and pane number.  
+* When `cd` in `tmux` or `GNU screen` session, alias is automatically added / removed using session name, window number and pane number.  
 So you can easily `cd` by using aliases added in another session or another window.
 
-2. This feature can be enabled by setting `CDA_AUTO_ALIAS` to `true`.
+* This feature can be enabled by setting `CDA_AUTO_ALIAS` to `true`.
 
-3. `-m` `--multiplexer` temporarily switches to auto alias list for terminal multiplexer.
+* `-m` `--multiplexer` temporarily switches to auto alias list for terminal multiplexer.
 ```console
 $ tmux ls
 dev1: 1 windows (created Tue Feb 07 01:24:11 2017) [80x19] (attatched)
@@ -362,7 +362,7 @@ $ pwd
 /quux/qux/baz2/bar/foo
 ```
 
-4. Of course you can use tab completion and filters.
+* Of course you can use tab completion and filters.
 ```console
 $ cda -m d<TAB>
 $ cda -m dev
@@ -373,35 +373,35 @@ dev2_0          /quux/qux/baz2/bar/foo
 dev2_1          /qux/baz/bar/foo
 ```
 
-5. If you specify `-` as the alias name, you can `cd` to the directory you executed `cd` last in all sessions.
+* If you specify `-` as the alias name, you can `cd` to the directory you executed `cd` last in all sessions.
 ```console
 $ cda -m -
 ```
 
-6. The auto-alias list and auto-pwd file are automatically created in `~/.cda/lists` as `.autolist` and `.autopwd` respectively.
+* The auto-alias list and auto-pwd file are automatically created in `~/.cda/lists` as `.autolist` and `.autopwd` respectively.
 ```console
 $ ls -a ~/.cda/lists
 .  ..  .autolist  .autopwd  default
 ```
 
-7. The auto-alias is realized by hooking `cd`.  
+* The auto-alias is realized by hooking `cd`.  
 You can change the hook type with the `CDA_AUTO_ALIAS_HOOK_TYPE` variable.
 
 # Config Variables
 ## Specification
-1. By default, configuration variables can be defined with the following file:
+* By default, configuration variables can be defined with the following file:
 
         ~/.cda/config
 
-2. You can specify multiple commands candidates with separating with `:`. The first available command will be used.
+* You can specify multiple commands candidates with separating with `:`. The first available command will be used.
 
         CMD_VAR=cmd1:cmd2:cmd3
 
-3. If you want to sepecify in a full-path including spaces or use with options, write with `'"..."'` like below.
+* If you want to sepecify in a full-path including spaces or use with options, write with `'"..."'` like below.
 
         CMD_VAR=cmd1:'"/the path/to/cmd" -a --long="a b"':cmd3
 
-4. For boolean-like variables, set one of the following values.  
+* For boolean-like variables, set one of the following values.  
 Truthy : [`true`, `yes`, `y`, `enabled`, `enable`, `on` ]  
 Falsy  : [ `false`, `no`, `n`, `disabled`, `disable`, `off` ]  
 They are not case sensitive.
