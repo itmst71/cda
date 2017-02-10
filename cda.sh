@@ -73,7 +73,7 @@ cda()
     #------------------------------------------------
     # app info
     declare -r APPNAME="cda"
-    declare -r VERSION="1.0.0 (2017-02-09)"
+    declare -r VERSION="1.0.1 (2017-02-10)"
 
     # override system variables
     local IFS=$' \t\n'
@@ -468,7 +468,7 @@ _cda::setup::init()
 
     # is the config file readable?
     if [[ ! -r $CONFIG_FILE ]]; then
-        _cda:msg FATAL "Could not read a file: " "$CONFIG_FILE"
+        _cda::msg::error FATAL "Could not read a file: " "$CONFIG_FILE"
         return 1
     fi
 
