@@ -73,7 +73,7 @@ cda()
     #------------------------------------------------
     # app info
     declare -r APPNAME="cda"
-    declare -r VERSION="1.0.0 (2017-02-09)"
+    declare -r VERSION="1.0.1 (2017-02-16)"
 
     # override system variables
     local IFS=$' \t\n'
@@ -468,7 +468,7 @@ _cda::setup::init()
 
     # is the config file readable?
     if [[ ! -r $CONFIG_FILE ]]; then
-        _cda:msg FATAL "Could not read a file: " "$CONFIG_FILE"
+        _cda::msg::error FATAL "Could not read a file: " "$CONFIG_FILE"
         return 1
     fi
 
@@ -896,6 +896,7 @@ _cda::option::parse()
     if [[ ${#err_undef_s[@]} -ne 0 || ${#err_undef_l[@]} -ne 0 ]]; then
         msg=$(<<< "${err_undef_s[*]-} ${err_undef_l[*]-}" \tr " " "\n" | \sed '/^$/d' | \sort | \uniq | \tr "\n" " ")
         _cda::msg::error WARNING "Undefined Option(s): " "$msg"
+        rtn=1
     fi
 
     # check options requiring arg
@@ -2170,7 +2171,7 @@ Version     : $VERSION
 License     : MIT License
 Author      : itmst71@gmail.com
 URL         : https://github.com/itmst71/cda
-Required    : Bash 3.2+ / Zsh 5.1+, Some POSIX commands
+Required    : Bash 3.2+ / Zsh 5.0+, Some POSIX commands
 Optional    : Interactive Filter(percol, peco, fzf, fzy etc...)
             : Bash-completion
             : Terminal Multiplexer(tmux or GNU screen)
