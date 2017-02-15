@@ -2171,7 +2171,7 @@ Version     : $VERSION
 License     : MIT License
 Author      : itmst71@gmail.com
 URL         : https://github.com/itmst71/cda
-Required    : Bash 3.2+ / Zsh 5.1+, Some POSIX commands
+Required    : Bash 3.2+ / Zsh 5.0+, Some POSIX commands
 Optional    : Interactive Filter(percol, peco, fzf, fzy etc...)
             : Bash-completion
             : Terminal Multiplexer(tmux or GNU screen)
