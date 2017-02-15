@@ -896,6 +896,7 @@ _cda::option::parse()
     if [[ ${#err_undef_s[@]} -ne 0 || ${#err_undef_l[@]} -ne 0 ]]; then
         msg=$(<<< "${err_undef_s[*]-} ${err_undef_l[*]-}" \tr " " "\n" | \sed '/^$/d' | \sort | \uniq | \tr "\n" " ")
         _cda::msg::error WARNING "Undefined Option(s): " "$msg"
+        rtn=1
     fi
 
     # check options requiring arg
