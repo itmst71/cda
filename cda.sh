@@ -567,10 +567,22 @@ _cda::setup::use()
             return 1
         fi
 
-        if [[ ! -f $LIST_DIR/$list_name ]]; then
-            _cda::msg::error ERROR "No Such List File : " "$LIST_DIR/$list_name"
-            return 1
+        # exact matching
+        local tmp_name="$(\ls -1F "$LIST_DIR" | \grep -v / | \grep -E "^$list_name$")"
+        if [[ -z $tmp_name ]]; then
+            # partial matching
+            tmp_name="$(\ls -1F "$LIST_DIR" | \grep -v / | \grep -E "^$list_name")"
+            if [[ -z $tmp_name ]]; then
+                _cda::msg::error ERROR "No Such List File: " "$LIST_DIR/$list_name"
+                return 1
+            fi
+
+            if [[ "$(\grep -c "" <<< "$tmp_name")" -ne 1 ]]; then
+                _cda::msg::error WARNING "Ambiguous List Name: " "$list_name" "\n$tmp_name"
+                return 1
+            fi
         fi
+        list_name=$tmp_name
 
     # change default list
     else    
