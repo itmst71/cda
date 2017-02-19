@@ -123,20 +123,20 @@ $ cda --config
 ```console
 $ cda
 QUERY>                                       (1/5) [1/1]
-bar         /baz/bar
-baz         /baz
-foo         /baz/bar/foo
-foo2        /qux/baz/bar/foo
-foo2_2      /quux/qux/baz/bar/foo
+:bar         /baz/bar
+:baz         /baz
+:foo         /baz/bar/foo
+:foo2        /qux/baz/bar/foo
+:foo2_2      /quux/qux/baz/bar/foo
 ```
 
 * If the specified alias name matches multiple aliases, only those are passed to the filter.
 ```console
 $ cda f
 QUERY>                                       (1/3) [1/1]
-foo         /baz/bar/foo
-foo2        /qux/baz/bar/foo
-foo2_2      /quux/qux/baz/bar/foo 
+:foo         /baz/bar/foo
+:foo2        /qux/baz/bar/foo
+:foo2_2      /quux/qux/baz/bar/foo 
 ```
         
 * If there is an exact match alias, it will be used.
@@ -150,18 +150,18 @@ $ pwd
 ```console
 $ cda foo2 -f
 QUERY>                                       (1/2) [1/1]
-foo2        /qux/baz/bar/foo
-foo2_2      /quux/qux/baz/bar/foo
+:foo2        /qux/baz/bar/foo
+:foo2_2      /quux/qux/baz/bar/foo
 ```
 
 * `-F` `--cmd-filter` can override `CDA_CMD_FILTER` variable.
 ```console
 $ cda -F fzf
-  foo2_2      /quux/qux/baz/bar/foo
-  foo2        /qux/baz/bar/foo
-  foo         /baz/bar/foo
-  baz         /baz
-> bar         /baz/bar
+  :foo2_2      /quux/qux/baz/bar/foo
+  :foo2        /qux/baz/bar/foo
+  :foo         /baz/bar/foo
+  :baz         /baz
+> :bar         /baz/bar
   5/5
 > 
 ```
@@ -275,13 +275,13 @@ So you can narrow them down to `cd` by number.
 ```console
 $ cda ./troublesome_names_for_input
 QUERY>                                       (1/7) [1/1]
-#0       .
-#1       অসমীয়া
-#2       Հայերեն
-#3       한국어
-#4       عربي
-#5       English
-#6       日本語
+:0       .
+:1       অসমীয়া
+:2       Հայերեն
+:3       한국어
+:4       عربي
+:5       English
+:6       日本語
 ```
 
 * If the argument does not contain a hint that it is a file path like `/` or `.`, it will be treated as an alias name.  
@@ -294,10 +294,10 @@ $ cda ./foo
 ```console
 $ cda -s foo
 QUERY>                                       (1/4) [1/1]
-#0       .
-#1       subdir1_of_foo
-#2       subdir2_of_foo
-#3       subdir3_of_foo
+:0       .
+:1       subdir1_of_foo
+:2       subdir2_of_foo
+:3       subdir3_of_foo
 ```
 
 * `-s` `--subdir` is equivalent to following 2 examples
@@ -305,19 +305,19 @@ QUERY>                                       (1/4) [1/1]
 $ cda foo
 $ cda .
 QUERY>                                       (1/4) [1/1]
-#0       .
-#1       subdir1_of_foo
-#2       subdir2_of_foo
-#3       subdir3_of_foo
+:0       .
+:1       subdir1_of_foo
+:2       subdir2_of_foo
+:3       subdir3_of_foo
 ```
 
 ```console
 $ cda "`cda -p foo`"
 QUERY>                                       (1/4) [1/1]
-#0       .
-#1       subdir1_of_foo
-#2       subdir2_of_foo
-#3       subdir3_of_foo
+:0       .
+:1       subdir1_of_foo
+:2       subdir2_of_foo
+:3       subdir3_of_foo
 ```
 
 * If you specify a subdirectory number with the second argument, you can confirm the selection without the filter.
@@ -367,10 +367,10 @@ $ pwd
 $ cda -m d<TAB>
 $ cda -m dev
 QUERY>                                       (1/4) [1/1]
-dev1_0_0        /baz
-dev1_0_1        /baz/bar/foo
-dev2_0          /quux/qux/baz2/bar/foo
-dev2_1          /qux/baz/bar/foo
+:dev1_0_0        /baz
+:dev1_0_1        /baz/bar/foo
+:dev2_0          /quux/qux/baz2/bar/foo
+:dev2_1          /qux/baz/bar/foo
 ```
 
 * If you specify `-` as the alias name, you can `cd` to the directory you executed `cd` last in all sessions.
@@ -438,6 +438,11 @@ Specify a name or path of editor commands to edit the list file with `-e` `--edi
 `-E --cmd-editor` can override this.
 
         CDA_CMD_EDITOR=vim:nano:emacs:vi
+
+* CDA_FILTER_LINE_PREFIX  
+Set to true to add a colon prefix to each line of the list passed to the filter. It will help you to match the beginning of the line.
+
+        CDA_FILTER_LINE_PREFIX=true
 
 * CDA_BUILTIN_CD  
 Set to `true` if you do not want to affect or be affected by external cd extension tools.  

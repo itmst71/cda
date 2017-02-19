@@ -18,6 +18,7 @@ fi
 
 CDA_BASH_COMPLETION="${CDA_BASH_COMPLETION:-true}"
 CDA_AUTO_ALIAS="${CDA_AUTO_ALIAS:-false}"
+CDA_FILTER_LINE_PREFIX="${CDA_FILTER_LINE_PREFIX:-true}"
 
 if [[ -n ${BASH_VERSION-} ]]; then
     CDA_AUTO_ALIAS_HOOK_TYPE="${CDA_AUTO_ALIAS_HOOK_TYPE:-function}"
@@ -140,7 +141,7 @@ cda()
         | FLAG_CHECK | FLAG_CLEAN | FLAG_SHOW_CONFIG
         | FLAG_UPDATE_AUTOALIAS))
 
-    # config variables
+    # default config variables
     declare -r CDA_BASH_COMPLETION_DEFAULT=true
     declare -r CDA_CMD_FILTER_DEFAULT="percol:peco:fzf:fzy"
     declare -r CDA_CMD_OPEN_DEFAULT="xdg-open:open:ranger:mc"
@@ -151,6 +152,7 @@ cda()
     declare -r CDA_AUTO_ALIAS_DEFAULT=true
     declare -r CDA_AUTO_ALIAS_HOOK_TYPE_DEFAULT="$([[ -n ${ZSH_VERSION-} ]] && \printf "chpwd" || \printf "function")"
     declare -r CDA_LIST_HIGHLIGHT_COLOR_DEFAULT="0;0;32"
+    declare -r CDA_FILTER_LINE_PREFIX_DEFAULT=true
 
     # misc
     declare -r RTN_COMMAND_NOT_FOUND=127
@@ -625,6 +627,7 @@ _cda::config::create()
 # CDA_CMD_FILTER=$CDA_CMD_FILTER_DEFAULT
 # CDA_CMD_OPEN=$CDA_CMD_OPEN_DEFAULT
 # CDA_CMD_EDITOR=$CDA_CMD_EDITOR_DEFAULT
+# CDA_FILTER_LINE_PREFIX=$CDA_FILTER_LINE_PREFIX_DEFAULT
 # CDA_BUILTIN_CD=false
 # CDA_AUTO_ALIAS=false
 # CDA_AUTO_ALIAS_HOOK_TYPE=$CDA_AUTO_ALIAS_HOOK_TYPE_DEFAULT
@@ -644,6 +647,7 @@ CDA_BASH_COMPLETION=${CDA_BASH_COMPLETION:-CDA_BASH_COMPLETION_DEFAULT}
 CDA_CMD_FILTER=${CDA_CMD_FILTER:-$CDA_CMD_FILTER_DEFAULT}
 CDA_CMD_OPEN=${CDA_CMD_OPEN:-$CDA_CMD_OPEN_DEFAULT}
 CDA_CMD_EDITOR=${CDA_CMD_EDITOR:-$CDA_CMD_EDITOR_DEFAULT}
+CDA_FILTER_LINE_PREFIX=${CDA_FILTER_LINE_PREFIX:-$CDA_FILTER_LINE_PREFIX_DEFAULT}
 CDA_BUILTIN_CD=${CDA_BUILTIN_CD:-$CDA_BUILTIN_CD_DEFAULT}
 CDA_AUTO_ALIAS=${CDA_AUTO_ALIAS:-$CDA_AUTO_ALIAS_DEFAULT}
 CDA_AUTO_ALIAS_HOOK_TYPE=${CDA_AUTO_ALIAS_HOOK_TYPE:-$CDA_AUTO_ALIAS_HOOK_TYPE_DEFAULT}
@@ -1167,7 +1171,11 @@ _cda::list::select()
 
     # no alias name specified
     if [[ -z ${@-} ]]; then
-        line=$(_cda::list::print | _cda::cmd::exec FILTER -p)
+        if _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX"; then
+            line=$(_cda::list::print | \sed 's/^/:/' | _cda::cmd::exec FILTER -p | \sed 's/^://')
+        else
+            line=$(_cda::list::print | _cda::cmd::exec FILTER -p)
+        fi
         
         if [[ $? -eq $RTN_COMMAND_NOT_FOUND ]]; then
             local cnt="$(_cda::list::print | \grep -c "")"
@@ -1205,8 +1213,12 @@ _cda::list::select()
             line="$partial_match_lines"
         
         elif [[ $partial_match_count -gt 1 ]] || _cda::flag::match $FLAG_FILTER_FORCED; then
-            line=$(_cda::cmd::exec FILTER -p <<< "$partial_match_lines")
-
+            if _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX"; then
+                line=$(<<< "$partial_match_lines" \sed 's/^/:/' | _cda::cmd::exec FILTER -p | \sed 's/^://')
+            else
+                line=$(<<< "$partial_match_lines" _cda::cmd::exec FILTER -p)
+            fi
+            
             if [[ $? -eq $RTN_COMMAND_NOT_FOUND ]]; then
                 _cda::list::list "${@-}" >&2
                 return $RTN_COMMAND_NOT_FOUND
@@ -1332,8 +1344,12 @@ _cda::list::remove()
 
     # with NO arg
     if [[ -z ${@-} ]]; then
-        line=$(_cda::list::print | sed 's/^/\*\*\*REMOVE\*\*\*    /' | _cda::cmd::exec FILTER -p)
-        
+        if _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX"; then
+            line=$(_cda::list::print | \sed 's/^/\*\*\*REMOVE\*\*\*    :/' | _cda::cmd::exec FILTER -p | \sed 's/^\*\*\*REMOVE\*\*\*    ://')
+        else
+            line=$(_cda::list::print | \sed 's/^/\*\*\*REMOVE\*\*\*    /' | _cda::cmd::exec FILTER -p | \sed 's/^\*\*\*REMOVE\*\*\*    //')
+        fi
+
         if [[ $? -eq $RTN_COMMAND_NOT_FOUND ]]; then
             return $RTN_COMMAND_NOT_FOUND
         fi
@@ -1341,7 +1357,6 @@ _cda::list::remove()
         if [[ -z $line ]]; then
             return 1
         fi
-        line=$(<<< "$line" sed 's/^\*\*\*REMOVE\*\*\*    //')
         remove_names+=(${line%% *})
     
     # with args
@@ -1388,7 +1403,7 @@ _cda::list::remove()
 
     if _cda::flag::match $FLAG_VERBOSE; then
         local match_lines="$(_cda::list::match -e "${remove_names[@]}")"
-        <<< "$match_lines" \sed 's/^/'$'\033''\[0;0;31mREMOVED: '$'\033''\[0m/g' |  _cda::msg::filter 2 >&2
+        <<< "$match_lines" \sed 's/^/'$'\033''\[0;0;31mRemoved: '$'\033''\[0m/g' |  _cda::msg::filter 2 >&2
     fi
 
     local regexp="^($(_cda::text::join ' +|' ${remove_names[@]}) +)"
@@ -1812,14 +1827,18 @@ _cda::dir::select()
         fi
         
         # add line numbers and send to a filter
-        line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | sed 's/^/#/' |  _cda::cmd::exec FILTER -p)"
+        if _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX"; then
+            line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | \sed 's/^/:/' |  _cda::cmd::exec FILTER -p | \sed 's/^://')"
+        else
+            line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | _cda::cmd::exec FILTER -p)"
+        fi
         [[ -z $line ]] && return 1
 
         # build a new path
-        new_abs_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^#[0-9]\{1,\}'$'\t''//')"
+        new_abs_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
 
         if _cda::flag::match $FLAG_VERBOSE; then
-            local num="$(<<< "$line" sed 's/^#\([0-9]\{1,\}\).*/\1/')"
+            local num="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
             printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$num" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter 2 >&2
         fi
     fi
@@ -2372,6 +2391,12 @@ CONFIG VARIABLES
         -E | --cmd-editor override this.
 
             CDA_CMD_EDITOR=$CDA_CMD_EDITOR_DEFAULT
+    
+    [ CDA_FILTER_LINE_PREFIX ]
+        Set to true to add a colon prefix to each line of the list passed
+        to the filter.
+
+            CDA_FILTER_LINE_PREFIX=$CDA_FILTER_LINE_PREFIX_DEFAULT
 
     [ CDA_BUILTIN_CD ]
         Set to true if you do not want to be affected by external
