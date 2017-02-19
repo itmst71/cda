@@ -34,6 +34,7 @@
 * bash-completion
 
 # Installation
+## git
 * `git clone`
 ```console
 $ git clone https://github.com/itmst71/cda.git
@@ -43,6 +44,19 @@ $ git clone https://github.com/itmst71/cda.git
 ```bash
 [[ -f "/path/to/cda/cda.sh" ]] && . /path/to/cda/cda.sh
 ```
+
+## Homebrew
+
+```console
+$ brew tap itmst71/tools
+$ brew install cda
+```
+
+* `source cda.sh` in `~/.bashrc` or `~/.zshrc`
+```bash
+ [[ -f "$(brew --prefix cda)/cda.sh" ]] && . "$(brew --prefix cda)/cda.sh"
+```
+
 
 # Usage
 ## Entry Level
