@@ -74,7 +74,7 @@ cda()
     #------------------------------------------------
     # app info
     declare -r APPNAME="cda"
-    declare -r VERSION="1.0.1 (2017-02-16)"
+    declare -r VERSION="1.1.0 (2017-02-19)"
 
     # override system variables
     local IFS=$' \t\n'
