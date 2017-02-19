@@ -439,7 +439,7 @@ Specify a name or path of editor commands to edit the list file with `-e` `--edi
 
         CDA_CMD_EDITOR=vim:nano:emacs:vi
 
-* CDA_FILTER_LINE_PREFIX
+* CDA_FILTER_LINE_PREFIX  
 Set to true to add a colon prefix to each line of the list passed to the filter. It will help you to match the beginning of the line.
 
         CDA_FILTER_LINE_PREFIX=true
