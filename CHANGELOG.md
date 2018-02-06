@@ -1,4 +1,7 @@
 # Change Log
+## v1.2.0 (2018-02-06)
+* Added the config variable CDA_EXEC_NAME to change the name to execute cda
+* Fixed the bug that Auto-Alias feature did not work
 
 ## v1.1.0 (2017-02-19)
 * Add a colon prefix to each line of the list passed to the filter
