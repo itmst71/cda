@@ -1,10 +1,14 @@
+# cda requires Bash 3.2+ or Zsh 5.0+
 if [[ -n ${BASH_VERSION-} ]]; then 
     CDA_SRC_ROOT="$(builtin cd -- "$(\dirname -- "$BASH_SOURCE")" && \pwd)"
     CDA_SRC_FILE="$CDA_SRC_ROOT/${BASH_SOURCE##*/}"
 elif [[ -n ${ZSH_VERSION-} ]]; then
     CDA_SRC_ROOT="${${(%):-%x}:A:h}"
     CDA_SRC_FILE="${${(%):-%x}:A}"
+else
+    return 1
 fi
+
 
 #------------------------------------------------
 # Config Variables
@@ -14,6 +18,12 @@ CDA_DATA_ROOT="${CDA_DATA_ROOT:-$HOME/.cda}"
 # load user config
 if [[ -f $CDA_DATA_ROOT/config ]]; then
     . "$CDA_DATA_ROOT/config"
+fi
+
+CDA_EXEC_NAME="${CDA_EXEC_NAME:-cda}"
+if [[ ! "$CDA_EXEC_NAME" =~ ^[a-zA-Z0-9_:]+$ || "$CDA_EXEC_NAME" == "cd" ]]; then
+    \printf -- "cda: ERROR: Invalid Value: CDA_EXEC_NAME in \"$CDA_DATA_ROOT/config\"\n"
+    return 1
 fi
 
 CDA_BASH_COMPLETION="${CDA_BASH_COMPLETION:-true}"
@@ -57,10 +67,26 @@ if [[ -n ${TMUX-} || -n ${STY-} ]]; then
     esac
 fi
 
+
 #------------------------------------------------
-# cda : Main Function
+# _cda : Main Function
 #------------------------------------------------
-cda()
+# define the function with the name defined by the user to call the main function _cda
+eval "$CDA_EXEC_NAME()
+{
+    local tmp_argv arg
+    tmp_argv=(\"\$@\")
+    if [[ ! -t 0 ]]; then
+        while IFS= \\read -r arg || [[ -n \"\$arg\" ]]
+        do
+            tmp_argv+=(\"\$arg\")
+        done < <(\\cat -)
+    fi
+    _cda \"\${tmp_argv[@]}\"
+}"
+
+# main function
+_cda()
 {  
     # setup for zsh
     if [[ -n ${ZSH_VERSION-} ]]; then
@@ -74,7 +100,7 @@ cda()
     #------------------------------------------------
     # app info
     declare -r APPNAME="cda"
-    declare -r VERSION="1.1.0 (2017-02-19)"
+    declare -r VERSION="1.2.0 (2018-02-05)"
 
     # override system variables
     local IFS=$' \t\n'
@@ -142,6 +168,7 @@ cda()
         | FLAG_UPDATE_AUTOALIAS))
 
     # default config variables
+    declare -r CDA_EXEC_NAME_DEFAULT=cda
     declare -r CDA_BASH_COMPLETION_DEFAULT=true
     declare -r CDA_CMD_FILTER_DEFAULT="percol:peco:fzf:fzy"
     declare -r CDA_CMD_OPEN_DEFAULT="xdg-open:open:ranger:mc"
@@ -190,22 +217,10 @@ cda()
     local Optarg_use_temp=         # -u --use-temp
     local Optarg_use=              # -U --use
    
-    # added pipe input as args
-    local tmp_argv
-    tmp_argv=("$@")
-    if [[ ! -t 0 ]]; then
-        local arg
-        while IFS= \read -r arg || [[ -n $arg ]]
-        do
-            tmp_argv+=("$arg")
-        done < <(\cat -)
-    fi
-
-    if ! _cda::option::parse "${tmp_argv[@]-}"; then
+    if ! _cda::option::parse "$@"; then
         return 1
     fi
     declare -r ARG_C=${#Argv[@]}
-    \unset tmp_argv
 
     
     #------------------------------------------------
@@ -623,6 +638,7 @@ _cda::setup::use()
 _cda::config::create()
 {
 << __EOCFG__ \cat > "$CONFIG_FILE"
+# CDA_EXEC_NAME=$CDA_EXEC_NAME_DEFAULT
 # CDA_BASH_COMPLETION=true
 # CDA_CMD_FILTER=$CDA_CMD_FILTER_DEFAULT
 # CDA_CMD_OPEN=$CDA_CMD_OPEN_DEFAULT
@@ -643,7 +659,8 @@ _cda::config::show()
 CDA_SRC_ROOT="$CDA_SRC_ROOT"
 CDA_SRC_FILE="$CDA_SRC_FILE"
 CDA_DATA_ROOT="$CDA_DATA_ROOT"
-CDA_BASH_COMPLETION=${CDA_BASH_COMPLETION:-CDA_BASH_COMPLETION_DEFAULT}
+CDA_EXEC_NAME=${CDA_EXEC_NAME:-$CDA_EXEC_NAME_DEFAULT}
+CDA_BASH_COMPLETION=${CDA_BASH_COMPLETION:-$CDA_BASH_COMPLETION_DEFAULT}
 CDA_CMD_FILTER=${CDA_CMD_FILTER:-$CDA_CMD_FILTER_DEFAULT}
 CDA_CMD_OPEN=${CDA_CMD_OPEN:-$CDA_CMD_OPEN_DEFAULT}
 CDA_CMD_EDITOR=${CDA_CMD_EDITOR:-$CDA_CMD_EDITOR_DEFAULT}
@@ -1518,7 +1535,7 @@ _cda::autoalias::chpwd()
 {
     [[ -z ${TMUX-} && -z ${STY-} ]] && return 0
     [[ "$PWD" == "$OLDPWD" ]] && return 0
-    cda -s --update-autoalias
+    _cda -s --update-autoalias
     return 0
 }
 
@@ -2357,14 +2374,21 @@ CONFIG VARIABLES
 
         BOOL_VAR=true
 
-    [ CDA_DATA_ROOT ]  
+    [ CDA_DATA_ROOT ]
         Specify the path to the user data directory.
         ***It must be set before "source cda.sh".***
         So it should be written in "~/.bashrc" instead of the config file.
 
             CDA_DATA_ROOT=\$HOME/.cda
 
-    [ CDA_BASH_COMPLETION ]  
+    [ CDA_EXEC_NAME ]
+        Specify the name to execute cda.
+        It will be associated with the internal function.
+        Bash-Completion will be configured with it.
+
+            CDA_EXEC_NAME=cda
+
+    [ CDA_BASH_COMPLETION ]
         Set to false if you don't want to use Bash-Completion.
         The defalt is true.
 
@@ -2452,7 +2476,7 @@ __EOHELP__
 #------------------------------------------------
 if _cda::utils::is_true "$CDA_BASH_COMPLETION"; then
 
-    _cda()
+    _cda:bash_completion()
     {
         # for zsh
         if [[ -n ${ZSH_VERSION-} ]] ; then
@@ -2540,7 +2564,7 @@ if _cda::utils::is_true "$CDA_BASH_COMPLETION"; then
 
             # complements a list file name
             elif [[ $prev =~ ^(-[a-zA-Z0-9]*[uUR]|--remove-list-file|--use(-temp)?|--remove-list)$ ]]; then
-                COMPREPLY=($(\compgen -W "$(cda -L --color never | \sed 's/^..//')" -- "$curr"))
+                COMPREPLY=($(\compgen -W "$(_cda -L --color never | \sed 's/^..//')" -- "$curr"))
                 return $?
 
             # complements a command name
@@ -2560,26 +2584,26 @@ if _cda::utils::is_true "$CDA_BASH_COMPLETION"; then
             # -m --multiplexer
             if [[ $COMP_LINE =~ \ (-[a-zA-Z0-9]*m[a-zA-Z0-9]*|--multiplexer)\  ]]; then
                 [[ $COMP_LINE =~ \ [a-zA-Z0-9_]+\  ]] && return 0
-                COMPREPLY=($(\compgen -W "$(cda -m --list-names  2>/dev/null)" -- "$curr"))
+                COMPREPLY=($(\compgen -W "$(_cda -m --list-names  2>/dev/null)" -- "$curr"))
                 return $?
 
             # -u use-temp
             elif [[ $COMP_LINE =~ \ (-[a-zA-Z0-9]*u|--use-temp)\ +[a-zA-Z0-9_]+\ + ]]; then
                 local using="$(\sed -e 's/^.* \{1,\}\(-[a-zA-Z0-9]*u\|--use-temp\) \{1,\}\([a-zA-Z0-9_]+\) \{1,\}.*$/\2/' <<< "$COMP_LINE")"
-                COMPREPLY=($(\compgen -W "$(cda -u $using --list-names  2>/dev/null)" -- "$curr"))
+                COMPREPLY=($(\compgen -W "$(_cda -u $using --list-names  2>/dev/null)" -- "$curr"))
                 return $?
 
             # aliases in the current list
             else
-                COMPREPLY=($(\compgen -W "$(cda --list-names  2>/dev/null)" -- "$curr"))
+                COMPREPLY=($(\compgen -W "$(_cda --list-names  2>/dev/null)" -- "$curr"))
                 return $?
             fi
         fi
     }
 
     if [[ -n ${ZSH_VERSION-} ]]; then
-        autoload -U +X bashcompinit && bashcompinit
+        \autoload -U +X bashcompinit && bashcompinit
     fi
 
-    \complete -o default -o dirnames -F _cda cda
+    \complete -o default -o dirnames -F _cda:bash_completion $CDA_EXEC_NAME
 fi
