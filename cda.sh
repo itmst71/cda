@@ -1,3 +1,4 @@
+# source(.) this file in ~/.bashrc or ~/.zshrc
 # cda requires Bash 3.2+ or Zsh 5.0+
 if [[ -n ${BASH_VERSION-} ]]; then 
     CDA_SRC_ROOT="$(builtin cd -- "$(\dirname -- "$BASH_SOURCE")" && \pwd)"
@@ -9,83 +10,9 @@ else
     return 1
 fi
 
-
 #------------------------------------------------
-# Config Variables
+# Main Function
 #------------------------------------------------
-CDA_DATA_ROOT="${CDA_DATA_ROOT:-$HOME/.cda}"
-
-# load user config
-if [[ -f $CDA_DATA_ROOT/config ]]; then
-    . "$CDA_DATA_ROOT/config"
-fi
-
-CDA_EXEC_NAME="${CDA_EXEC_NAME:-cda}"
-if [[ ! "$CDA_EXEC_NAME" =~ ^[a-zA-Z0-9_:]+$ || "$CDA_EXEC_NAME" == "cd" ]]; then
-    \printf -- "cda: ERROR: Invalid Value: CDA_EXEC_NAME in \"$CDA_DATA_ROOT/config\"\n"
-    return 1
-fi
-
-CDA_BASH_COMPLETION="${CDA_BASH_COMPLETION:-true}"
-CDA_AUTO_ALIAS="${CDA_AUTO_ALIAS:-false}"
-CDA_FILTER_LINE_PREFIX="${CDA_FILTER_LINE_PREFIX:-true}"
-
-if [[ -n ${BASH_VERSION-} ]]; then
-    CDA_AUTO_ALIAS_HOOK_TYPE="${CDA_AUTO_ALIAS_HOOK_TYPE:-function}"
-elif [[ -n ${ZSH_VERSION-} ]]; then
-    CDA_AUTO_ALIAS_HOOK_TYPE="${CDA_AUTO_ALIAS_HOOK_TYPE:-chpwd}"
-fi
-
-
-#------------------------------------------------
-# Hook cd for the Auto-Alias feature
-#------------------------------------------------
-if [[ -n ${TMUX-} || -n ${STY-} ]]; then
-    case "$(\tr "[:upper:]" "[:lower:]" <<< "$CDA_AUTO_ALIAS")" in
-        0 | true | yes | y | enabled | enable | on)
-            case "$CDA_AUTO_ALIAS_HOOK_TYPE" in
-                function)
-                    cd()
-                    {
-                        builtin cd "$@"
-                        [[ $? -ne 0 ]] && return 1
-                        _cda::autoalias::chpwd
-                        return 0
-                    };;
-                prompt)
-                    PROMPT_COMMAND=$(\printf -- "%s" "${PROMPT_COMMAND%;}; _cda::autoalias::chpwd;")
-                    ;;
-                chpwd)
-                    if [[ -n ${ZSH_VERSION-} ]]; then
-                        \autoload -Uz add-zsh-hook
-                        \add-zsh-hook chpwd _cda::autoalias::chpwd
-                    else
-                        \printf -- "cda: WARNING: CDA_AUTO_ALIAS_HOOK_TYPE=chpwd works only in zsh\n"
-                    fi
-            esac
-            ;;
-    esac
-fi
-
-
-#------------------------------------------------
-# _cda : Main Function
-#------------------------------------------------
-# define the function with the name defined by the user to call the main function _cda
-eval "$CDA_EXEC_NAME()
-{
-    local tmp_argv arg
-    tmp_argv=(\"\$@\")
-    if [[ ! -t 0 ]]; then
-        while IFS= \\read -r arg || [[ -n \"\$arg\" ]]
-        do
-            tmp_argv+=(\"\$arg\")
-        done < <(\\cat -)
-    fi
-    _cda \"\${tmp_argv[@]}\"
-}"
-
-# main function
 _cda()
 {  
     # setup for zsh
@@ -95,12 +22,15 @@ _cda()
         \setopt localoptions SH_WORD_SPLIT
     fi
 
+    # set the root directory path
+    CDA_DATA_ROOT="${CDA_DATA_ROOT:-$HOME/.cda}"
+
     #------------------------------------------------
     # Constant variables
     #------------------------------------------------
     # app info
     declare -r APPNAME="cda"
-    declare -r VERSION="1.2.0 (2018-02-05)"
+    declare -r VERSION="1.2.0 (2018-02-06)"
 
     # override system variables
     local IFS=$' \t\n'
@@ -126,7 +56,7 @@ _cda()
     declare -r AUTO_ALIAS_LIST_NAME=".autolist"
     declare -r AUTO_ALIAS_LIST_FILE="$LIST_DIR/$AUTO_ALIAS_LIST_NAME"
     declare -r AUTO_ALIAS_PWD_FILE="$LIST_DIR/.autopwd"
-    
+
     # flags
     declare -r FLAG_NONE=0
     declare -r FLAG_CD=$((1<<0))
@@ -176,7 +106,7 @@ _cda()
     declare -r CDA_ALIAS_MAX_LEN_DEFAULT=16
     declare -r CDA_COLOR_MODE_DEFAULT=auto
     declare -r CDA_BUILTIN_CD_DEFAULT=false
-    declare -r CDA_AUTO_ALIAS_DEFAULT=true
+    declare -r CDA_AUTO_ALIAS_DEFAULT=false
     declare -r CDA_AUTO_ALIAS_HOOK_TYPE_DEFAULT="$([[ -n ${ZSH_VERSION-} ]] && \printf "chpwd" || \printf "function")"
     declare -r CDA_LIST_HIGHLIGHT_COLOR_DEFAULT="0;0;32"
     declare -r CDA_FILTER_LINE_PREFIX_DEFAULT=true
@@ -184,17 +114,19 @@ _cda()
     # misc
     declare -r RTN_COMMAND_NOT_FOUND=127
 
-    # check that $CDA_ALIAS_MAX_LEN is valid
-    if ! _cda::num::is_number "${CDA_ALIAS_MAX_LEN-}" || [[ ! $CDA_ALIAS_MAX_LEN -gt 0 ]]; then
-        CDA_ALIAS_MAX_LEN=$CDA_ALIAS_MAX_LEN_DEFAULT
+
+    #------------------------------------------------
+    # Setup
+    #------------------------------------------------
+    if ! _cda::utils::is_true "$CDA_INITIALIZED"; then
+        if ! _cda::setup::init; then
+            return 1
+        fi
+        return 0
     fi
 
-
-    #------------------------------------------------
-    # Setup config directories and files
-    #------------------------------------------------
     local USING_LIST_FILE=
-    if ! _cda::setup::init; then
+    if ! _cda::setup::paths; then
         return 1
     fi
 
@@ -421,6 +353,86 @@ _cda()
 #------------------------------------------------
 _cda::setup::init()
 {
+    if _cda::utils::is_true "$CDA_INITIALIZED"; then
+        return 0
+    fi
+
+    # load user config
+    if [[ -f "$CONFIG_FILE" ]]; then
+        . "$CONFIG_FILE"
+    fi
+
+    # define the function with the name defined by the user to call the main function _cda
+    CDA_EXEC_NAME="${CDA_EXEC_NAME:-$CDA_EXEC_NAME_DEFAULT}"
+    if [[ ! "$CDA_EXEC_NAME" =~ ^[a-zA-Z0-9_:]+$ || "$CDA_EXEC_NAME" == "cd" ]]; then
+        \printf -- "cda: ERROR: Invalid Value: CDA_EXEC_NAME in \"$CDA_DATA_ROOT/config\"\n"
+        return 1
+    fi
+    eval "$CDA_EXEC_NAME()
+    {
+        local tmp_argv arg
+        tmp_argv=(\"\$@\")
+        if [[ ! -t 0 ]]; then
+            while IFS= \\read -r arg || [[ -n \"\$arg\" ]]
+            do
+                tmp_argv+=(\"\$arg\")
+            done < <(\\cat -)
+        fi
+        _cda \"\${tmp_argv[@]}\"
+    }"
+
+    # hook cd for the Auto-Alias feature
+    CDA_AUTO_ALIAS="${CDA_AUTO_ALIAS:-$CDA_AUTO_ALIAS_DEFAULT}"
+    CDA_AUTO_ALIAS_HOOK_TYPE="${CDA_AUTO_ALIAS_HOOK_TYPE:-$CDA_AUTO_ALIAS_HOOK_TYPE_DEFAULT}"
+    if [[ -n ${TMUX-} || -n ${STY-} ]]; then
+        if _cda::utils::is_true "$CDA_AUTO_ALIAS"; then
+            case "$CDA_AUTO_ALIAS_HOOK_TYPE" in
+                function)
+                    cd()
+                    {
+                        builtin cd "$@"
+                        [[ $? -ne 0 ]] && return 1
+                        _cda::autoalias::chpwd
+                        return 0
+                    };;
+                prompt)
+                    PROMPT_COMMAND=$(\printf -- "%s" "${PROMPT_COMMAND%;}; _cda::autoalias::chpwd;")
+                    ;;
+                chpwd)
+                    if [[ -n ${ZSH_VERSION-} ]]; then
+                        \autoload -Uz add-zsh-hook
+                        \add-zsh-hook chpwd _cda::autoalias::chpwd
+                    else
+                        \printf -- "cda: WARNING: CDA_AUTO_ALIAS_HOOK_TYPE=chpwd works only in zsh\n"
+                    fi
+            esac
+        fi
+    fi
+
+    # configure Bash-Completion
+    CDA_BASH_COMPLETION="${CDA_BASH_COMPLETION:-$CDA_BASH_COMPLETION_DEFAULT}"
+    if _cda::utils::is_true "$CDA_BASH_COMPLETION"; then
+        if [[ -n ${ZSH_VERSION-} ]]; then
+            \autoload -U +X bashcompinit && bashcompinit
+        fi
+        \complete -o default -o dirnames -F _cda::completion::exec $CDA_EXEC_NAME
+    fi
+
+    # check that $CDA_ALIAS_MAX_LEN is valid
+    if ! _cda::num::is_number "${CDA_ALIAS_MAX_LEN-}" || [[ ! $CDA_ALIAS_MAX_LEN -gt 0 ]]; then
+        CDA_ALIAS_MAX_LEN=$CDA_ALIAS_MAX_LEN_DEFAULT
+    fi
+
+    CDA_FILTER_LINE_PREFIX="${CDA_FILTER_LINE_PREFIX:-$CDA_FILTER_LINE_PREFIX_DEFAULT}"
+
+    # set initialized flag
+    CDA_INITIALIZED=true
+    return 0
+}
+
+
+_cda::setup::paths()
+{
     if [[ ! $CDA_DATA_ROOT =~ ^/ ]]; then
         _cda::msg::error FATAL "Invalid CDA_DATA_ROOT: " "$CDA_DATA_ROOT"
         return 1
@@ -639,13 +651,13 @@ _cda::config::create()
 {
 << __EOCFG__ \cat > "$CONFIG_FILE"
 # CDA_EXEC_NAME=$CDA_EXEC_NAME_DEFAULT
-# CDA_BASH_COMPLETION=true
+# CDA_BASH_COMPLETION=$CDA_BASH_COMPLETION_DEFAULT
 # CDA_CMD_FILTER=$CDA_CMD_FILTER_DEFAULT
 # CDA_CMD_OPEN=$CDA_CMD_OPEN_DEFAULT
 # CDA_CMD_EDITOR=$CDA_CMD_EDITOR_DEFAULT
 # CDA_FILTER_LINE_PREFIX=$CDA_FILTER_LINE_PREFIX_DEFAULT
-# CDA_BUILTIN_CD=false
-# CDA_AUTO_ALIAS=false
+# CDA_BUILTIN_CD=$CDA_BUILTIN_CD_DEFAULT
+# CDA_AUTO_ALIAS=$CDA_AUTO_ALIAS_DEFAULT
 # CDA_AUTO_ALIAS_HOOK_TYPE=$CDA_AUTO_ALIAS_HOOK_TYPE_DEFAULT
 # CDA_COLOR_MODE=$CDA_COLOR_MODE_DEFAULT
 # CDA_LIST_HIGHLIGHT_COLOR="$CDA_LIST_HIGHLIGHT_COLOR_DEFAULT"
@@ -2472,138 +2484,141 @@ __EOHELP__
 
 
 #------------------------------------------------
-# Bash-Completion
+# _cda::completion
 #------------------------------------------------
-if _cda::utils::is_true "$CDA_BASH_COMPLETION"; then
+_cda::completion::exec()
+{
+    # for zsh
+    if [[ -n ${ZSH_VERSION-} ]] ; then
+        \setopt localoptions KSHARRAYS
+        \setopt localoptions NO_NOMATCH
+        \setopt localoptions SH_WORD_SPLIT
+        \setopt localoptions AUTO_PARAM_SLASH
+        \setopt localoptions LIST_TYPES
+    fi
+    
+    COMPREPLY=()
+    local curr="${COMP_WORDS[COMP_CWORD]}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    _cda:bash_completion()
-    {
-        # for zsh
-        if [[ -n ${ZSH_VERSION-} ]] ; then
-            \setopt localoptions KSHARRAYS
-            \setopt localoptions NO_NOMATCH
-            \setopt localoptions SH_WORD_SPLIT
-            \setopt localoptions AUTO_PARAM_SLASH
-            \setopt localoptions LIST_TYPES
+    local arg optEnd=false idx=0
+    for arg in "${COMP_WORDS[@]}"
+    do
+        [[ $idx -eq $COMP_CWORD ]] && break
+        if [[ $arg == -- ]] ; then
+            optEnd=true
+            \break
         fi
-        
-        COMPREPLY=()
-        local curr="${COMP_WORDS[COMP_CWORD]}"
-        local prev="${COMP_WORDS[COMP_CWORD-1]}"
+        : $((idx++))
+    done
 
-        local arg optEnd=false idx=0
-        for arg in "${COMP_WORDS[@]}"
-        do
-            [[ $idx -eq $COMP_CWORD ]] && break
-            if [[ $arg == -- ]] ; then
-                optEnd=true
-                \break
-            fi
-            : $((idx++))
-        done
-
-        if [[ $optEnd == false ]] ; then
-            case "$prev" in
-                # options requiring no more argument
-                -e | --edit | -h | --help | -H | --help-full | -L | --list-files | \
-                --version | --config)
-                    return 0
-                    ;;
-                
-                # options requiring fixed string
-                --color)
-                    COMPREPLY=($(\compgen -W "auto always never" -- "$curr"))
-                    return $?
-                    ;;
-            esac
-
-            # a list file name has already been confirmed
-            if [[ $COMP_LINE =~ \ (-[a-zA-Z0-9]*[UR]|--remove-list-file|--use)\ +[a-zA-Z0-9_]+\ + ]]; then
+    if [[ $optEnd == false ]] ; then
+        case "$prev" in
+            # options requiring no more argument
+            -e | --edit | -h | --help | -H | --help-full | -L | --list-files | \
+            --version | --config)
                 return 0
+                ;;
             
-            # the user is inputting a new value
-            elif [[ $prev =~ ^(-[a-zA-Z0-9]*[an]|--add|--number)$ ]] ; then
-                COMPREPLY=
-                return 0
-
-            # complements option name
-            elif [[ $curr =~ ^- ]] ; then
-                COMPREPLY=($(\compgen -W "
-                    -a --add
-                    -A --add-forced
-                    -B --builtin-cd
-                    -c --check
-                    -C --clean	
-                    -e --edit
-                    -E --cmd-editor
-                    -F --cmd-filter
-                    -f --filter
-                    -h --help
-                    -H --help-full
-                    -l --list
-                    -L --list-files
-                    -n --number
-                    -o --open
-                    -O --cmd-open
-                    -p --path
-                    -r --remove
-                    -R --remove-list
-                    -m --multiplexer
-                    -s --subdir
-                    -U --use
-                    -u --use-temp
-                    -v --verbose
-                    --version
-                    --list-names
-                    --list-paths
-                    --color
-                    --config
-                    --show-config 
-                    " -- "$curr"))
+            # options requiring fixed string
+            --color)
+                COMPREPLY=($(\compgen -W "auto always never" -- "$curr"))
                 return $?
+                ;;
+        esac
 
-            # complements a list file name
-            elif [[ $prev =~ ^(-[a-zA-Z0-9]*[uUR]|--remove-list-file|--use(-temp)?|--remove-list)$ ]]; then
-                COMPREPLY=($(\compgen -W "$(_cda -L --color never | \sed 's/^..//')" -- "$curr"))
-                return $?
+        # a list file name has already been confirmed
+        if [[ $COMP_LINE =~ \ (-[a-zA-Z0-9]*[UR]|--remove-list-file|--use)\ +[a-zA-Z0-9_]+\ + ]]; then
+            return 0
+        
+        # the user is inputting a new value
+        elif [[ $prev =~ ^(-[a-zA-Z0-9]*[an]|--add|--number)$ ]] ; then
+            COMPREPLY=
+            return 0
 
-            # complements a command name
-            elif [[ $prev =~ ^(-[a-zA-Z0-9]*[EFO]|--cmd-(editor|filter|open))$ ]] ; then
-                COMPREPLY=($(\compgen -c -- "$curr"))
-                return $?
-            fi
+        # complements option name
+        elif [[ $curr =~ ^- ]] ; then
+            COMPREPLY=($(\compgen -W "
+                -a --add
+                -A --add-forced
+                -B --builtin-cd
+                -c --check
+                -C --clean	
+                -e --edit
+                -E --cmd-editor
+                -F --cmd-filter
+                -f --filter
+                -h --help
+                -H --help-full
+                -l --list
+                -L --list-files
+                -n --number
+                -o --open
+                -O --cmd-open
+                -p --path
+                -r --remove
+                -R --remove-list
+                -m --multiplexer
+                -s --subdir
+                -U --use
+                -u --use-temp
+                -v --verbose
+                --version
+                --list-names
+                --list-paths
+                --color
+                --config
+                --show-config 
+                " -- "$curr"))
+            return $?
+
+        # complements a list file name
+        elif [[ $prev =~ ^(-[a-zA-Z0-9]*[uUR]|--remove-list-file|--use(-temp)?|--remove-list)$ ]]; then
+            COMPREPLY=($(\compgen -W "$(_cda -L --color never | \sed 's/^..//')" -- "$curr"))
+            return $?
+
+        # complements a command name
+        elif [[ $prev =~ ^(-[a-zA-Z0-9]*[EFO]|--cmd-(editor|filter|open))$ ]] ; then
+            COMPREPLY=($(\compgen -c -- "$curr"))
+            return $?
         fi
-
-        # complements a directory path
-        if [[ $curr =~ (/|^[.~]/?) || $COMP_LINE =~ \ (-[a-zA-Z0-9]*[aA]|--add(-forced)?)\ +[a-zA-Z0-9_]+\  ]]; then
-            COMPREPLY=($(\compgen -- "$curr"))
-            return $? 
-
-        # complements an alias name
-        else
-            # -m --multiplexer
-            if [[ $COMP_LINE =~ \ (-[a-zA-Z0-9]*m[a-zA-Z0-9]*|--multiplexer)\  ]]; then
-                [[ $COMP_LINE =~ \ [a-zA-Z0-9_]+\  ]] && return 0
-                COMPREPLY=($(\compgen -W "$(_cda -m --list-names  2>/dev/null)" -- "$curr"))
-                return $?
-
-            # -u use-temp
-            elif [[ $COMP_LINE =~ \ (-[a-zA-Z0-9]*u|--use-temp)\ +[a-zA-Z0-9_]+\ + ]]; then
-                local using="$(\sed -e 's/^.* \{1,\}\(-[a-zA-Z0-9]*u\|--use-temp\) \{1,\}\([a-zA-Z0-9_]+\) \{1,\}.*$/\2/' <<< "$COMP_LINE")"
-                COMPREPLY=($(\compgen -W "$(_cda -u $using --list-names  2>/dev/null)" -- "$curr"))
-                return $?
-
-            # aliases in the current list
-            else
-                COMPREPLY=($(\compgen -W "$(_cda --list-names  2>/dev/null)" -- "$curr"))
-                return $?
-            fi
-        fi
-    }
-
-    if [[ -n ${ZSH_VERSION-} ]]; then
-        \autoload -U +X bashcompinit && bashcompinit
     fi
 
-    \complete -o default -o dirnames -F _cda:bash_completion $CDA_EXEC_NAME
+    # complements a directory path
+    if [[ $curr =~ (/|^[.~]/?) || $COMP_LINE =~ \ (-[a-zA-Z0-9]*[aA]|--add(-forced)?)\ +[a-zA-Z0-9_]+\  ]]; then
+        COMPREPLY=($(\compgen -- "$curr"))
+        return $? 
+
+    # complements an alias name
+    else
+        # -m --multiplexer
+        if [[ $COMP_LINE =~ \ (-[a-zA-Z0-9]*m[a-zA-Z0-9]*|--multiplexer)\  ]]; then
+            [[ $COMP_LINE =~ \ [a-zA-Z0-9_]+\  ]] && return 0
+            COMPREPLY=($(\compgen -W "$(_cda -m --list-names  2>/dev/null)" -- "$curr"))
+            return $?
+
+        # -u use-temp
+        elif [[ $COMP_LINE =~ \ (-[a-zA-Z0-9]*u|--use-temp)\ +[a-zA-Z0-9_]+\ + ]]; then
+            local using="$(\sed -e 's/^.* \{1,\}\(-[a-zA-Z0-9]*u\|--use-temp\) \{1,\}\([a-zA-Z0-9_]+\) \{1,\}.*$/\2/' <<< "$COMP_LINE")"
+            COMPREPLY=($(\compgen -W "$(_cda -u $using --list-names  2>/dev/null)" -- "$curr"))
+            return $?
+
+        # aliases in the current list
+        else
+            COMPREPLY=($(\compgen -W "$(_cda --list-names  2>/dev/null)" -- "$curr"))
+            return $?
+        fi
+    fi
+}
+
+
+#------------------------------------------------
+# Initialize after sourcing this file
+#------------------------------------------------
+# set CDA_INITIALIZED as false and call once the main function to initialize
+CDA_INITIALIZED=false
+_cda
+if [[ $? -ne 0 ]]; then
+    \printf -- "cda: ERROR: Failed to initialize\n"
+    return 1
 fi
