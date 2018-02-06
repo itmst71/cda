@@ -2384,7 +2384,7 @@ CONFIG VARIABLES
     [ CDA_EXEC_NAME ]
         Specify the name to execute cda.
         It will be associated with the internal function.
-        Bash_completion will be configured with it.
+        Bash-Completion will be configured with it.
 
             CDA_EXEC_NAME=cda
 

@@ -429,6 +429,12 @@ Specify the path to the user data directory, which ***must be set before `source
 
         CDA_DATA_ROOT=$HOME/.cda
 
+* CDA_EXEC_NAME  
+Specify the name to execute cda. It will be associated with the internal function.  
+Bash-Completion will be configured with it.
+
+        CDA_EXEC_NAME=cda
+
 * CDA_BASH_COMPLETION  
 Set to `false` if you don't want to use Bash-Completion.  
 Default is `true`.
