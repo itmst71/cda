@@ -597,10 +597,10 @@ _cda::setup::use()
         fi
 
         # exact matching
-        local tmp_name="$(\ls -1F "$LIST_DIR" | \grep -v / | \grep -E "^$list_name$")"
+        local tmp_name="$(\ls -a1F "$LIST_DIR" | \grep -v / | \grep -E "^$list_name$")"
         if [[ -z $tmp_name ]]; then
             # partial matching
-            tmp_name="$(\ls -1F "$LIST_DIR" | \grep -v / | \grep -E "^$list_name")"
+            tmp_name="$(\ls -a1F "$LIST_DIR" | \grep -v / | \grep -E "^$list_name")"
             if [[ -z $tmp_name ]]; then
                 _cda::msg::error ERROR "No Such List File: " "$LIST_DIR/$list_name"
                 return 1
@@ -1547,7 +1547,7 @@ _cda::autoalias::chpwd()
 {
     [[ -z ${TMUX-} && -z ${STY-} ]] && return 0
     [[ "$PWD" == "$OLDPWD" ]] && return 0
-    _cda -s --update-autoalias
+    _cda -m --update-autoalias
     return 0
 }
 
