@@ -113,6 +113,8 @@ _cda()
 
     # misc
     declare -r RTN_COMMAND_NOT_FOUND=127
+    declare -r FD_STDOUT=1
+    declare -r FD_STDERR=2
 
 
     #------------------------------------------------
@@ -529,7 +531,7 @@ _cda::setup::list_files()
     do
         star="  "
         if [[ $name == $curr_name ]]; then
-            if _cda::msg::should_color 1; then
+            if _cda::msg::should_color $FD_STDOUT; then
                 name=$(_cda::text::color -f green -- "$name")
             fi
             star="* "
@@ -1128,7 +1130,7 @@ _cda::list::print()
 # -l --list
 _cda::list::list()
 {
-    if _cda::msg::should_color 1; then
+    if _cda::msg::should_color $FD_STDOUT; then
         _cda::list::print "$@" | _cda::list::highlight
         _cda::utils::check_pipes
     else
@@ -1847,7 +1849,7 @@ _cda::dir::select()
         local pad_width="$(($(\wc -c <<< "$dircnt") - 1))"
 
         if [[ -z "$(_cda::cmd::get filter)" ]]; then
-            if _cda::msg::should_color 2; then
+            if _cda::msg::should_color $FD_STDERR; then
                 _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 |  _cda::list::highlight >&2
             else
                 _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0
@@ -2043,8 +2045,8 @@ _cda::msg::should_color()
         never)    return 1;;
         auto)     
             case "$fd" in
-                1) return $TTY_STDOUT;;
-                2) return $TTY_STDERR;;
+                $FD_STDOUT) return $TTY_STDOUT;;
+                $FD_STDERR) return $TTY_STDERR;;
                 *) return 1;;
             esac
             ;;
