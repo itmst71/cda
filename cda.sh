@@ -1396,7 +1396,7 @@ _cda::list::remove()
         do
             # with a path
             if [[ $name =~ (/|^[.~]) ]]; then
-                abs_path=$(_cda::abs_path::to_abs "$name")
+                abs_path=$(_cda::path::to_abs "$name")
                 if [[ -z $abs_path ]]; then
                     continue
                 fi
