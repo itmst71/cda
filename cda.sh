@@ -1000,6 +1000,7 @@ _cda::cd::cd()
 #------------------------------------------------
 _cda::alias::validate()
 {
+    local IFS=$' \t\n'
     local args type= strict= error= show_error=
     args=()
     while [[ $# -ne 0 ]]
@@ -1059,16 +1060,17 @@ _cda::alias::validate()
 
 _cda::alias::name()
 {
+    local IFS=$' \t\n'
     local line="${1-}"
     if ! _cda::alias::validate --line "$line"; then
         return 1
     fi
-    local IFS=$' \t\n'
-    \printf -- "%s" ${line%% *}
+    \printf -- "%s" ${line%%[ $'\t']*}
 }
 
 _cda::alias::path()
 {
+    local IFS=$' \t\n'
     local line="${1-}"
     if ! _cda::alias::validate --line "$line"; then
         return 1
@@ -1078,8 +1080,18 @@ _cda::alias::path()
 
 _cda::alias::format()
 {
-    [[ -z "${1-}" || -z "${2-}" ]] && return 1
-    \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$1" "$2"
+    local IFS=$' \t\n'
+    local name abs_path
+    if [[ "$1" == "--line" ]]; then
+        name=$(_cda::alias::name "${2-}")
+        abs_path=$(_cda::alias::path "${2-}")
+    else
+        name=$1
+        abs_path=$2
+    fi
+    
+    [[ -z "${name-}" || -z "${abs_path-}" ]] && return 1
+    \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$name" "$abs_path"
 }
 
 
@@ -1375,11 +1387,9 @@ _cda::list::remove()
 
     # with NO arg
     if [[ -z ${@-} ]]; then
-        if _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX"; then
-            line=$(_cda::list::print | \sed 's/^/\*\*\*REMOVE\*\*\*    :/' | _cda::cmd::exec FILTER -p | \sed 's/^\*\*\*REMOVE\*\*\*    ://')
-        else
-            line=$(_cda::list::print | \sed 's/^/\*\*\*REMOVE\*\*\*    /' | _cda::cmd::exec FILTER -p | \sed 's/^\*\*\*REMOVE\*\*\*    //')
-        fi
+        local prefix=
+        _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX" && prefix=:
+        line=$(_cda::list::print | \sed 's/^/\*\*\*REMOVE\*\*\*    '$prefix'/' | _cda::cmd::exec FILTER -p | \sed 's/^\*\*\*REMOVE\*\*\*    '$prefix'//')
 
         if [[ $? -eq $RTN_COMMAND_NOT_FOUND ]]; then
             return $RTN_COMMAND_NOT_FOUND
@@ -1741,7 +1751,7 @@ _cda::dir::check()
                 err_path=$(_cda::text::color -f red -U -- "$err_path")
                 _cda::msg::error ERROR "Not Directory: " "" "$ok_path$err_path";;
     esac
-    return 1
+    return $rtn
 }
 
 # split dir path components at error
@@ -2068,6 +2078,7 @@ _cda::msg::filter()
 # formatted error message
 _cda::msg::error()
 {
+    local IFS=$' \t\n'
     local title="${1-}"
     local text="${2-}"
     local value="${3-}"
@@ -2082,10 +2093,12 @@ _cda::msg::error()
 
     local col=
     case "$(_cda::text::lower "$title")" in
-        notice)             col="-f green";;
+        info)               col="-f default";;
+        notice)             col="-f cyan";;
         warning|warn)       col="-f yellow";;
         error)              col="-f red";;
         "internal error")   col="-f yellow -b red";;
+        critical)           col="-f black -b red";;
         fatal)              col="-f white -b red";;
         *)                  col="-f default";;
     esac
