@@ -1478,6 +1478,7 @@ _cda::list::check()
 
     IFS=$'\n'
     local args_str="${args[*]}"
+    local cols=$(tput cols)
     while read -r line || [[ -n $line ]]
     do
         name=$(_cda::alias::name "$line")
@@ -1487,6 +1488,9 @@ _cda::list::check()
             arr_broken_data+=("$line")
             continue
         fi
+
+        # show progress
+        [[ $TTY_STDERR -eq 0 ]] && \printf >&2 "\r%-${cols}s" "Checking: $name"
 
         if [[ -n "$args_str" ]]; then
             # filtering with alias names
@@ -1523,7 +1527,10 @@ _cda::list::check()
             arr_wrong_format+=("$(_cda::text::color -f yellow -U -- "${line%%/*}") $abs_path")
         fi
     done < <(_cda::list::print | \awk 'NF')
-    
+
+    # clear progress
+    [[ $TTY_STDERR -eq 0 ]] && \printf >&2 "\r%-${cols}s\r" ""
+
     # output by error type
     local nl=
     local indent="  "
