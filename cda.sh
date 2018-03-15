@@ -972,7 +972,7 @@ _cda::cd::cd()
     local abs_path="$(_cda::list::path "${@-}")"
     [[ -z $abs_path ]] && return 1
 
-    if ! _cda::dir::check "$abs_path"; then
+    if ! _cda::dir::check --show-error "$abs_path"; then
         return 1
     fi
 
@@ -1337,7 +1337,7 @@ _cda::list::add()
         rel_path=$(\pwd)
     fi
     local abs_path="$(_cda::path::to_abs "$rel_path")"
-    if ! _cda::dir::check "$abs_path"; then
+    if ! _cda::dir::check --show-error "$abs_path"; then
         return 1
     fi
 
@@ -1664,7 +1664,7 @@ _cda::list::check()
         done < <(_cda::list::print | \grep "$dupl")
     done < <(_cda::list::print | \sort | \uniq -d)
 
-    # duplicate line
+    # output cleaned lines 
     if [[ "$clean" == true ]]; then
         \printf -- "%s\n" ${arr_out_lines[*]} | sort | uniq > "${USING_LIST_FILE}"
         _cda::utils::check_pipes
@@ -1850,33 +1850,42 @@ _cda::path::to_abs()
 #------------------------------------------------
 _cda::dir::check()
 {
+    local show_error=false
+    if [[ "${1-}" == --show-error ]]; then
+        show_error=true
+        \shift
+    fi
+
     if [[ -d ${1-} && -r ${1-} && -x ${1-} ]]; then
         return 0
     fi
 
     # split dir path components at error
     local IFS=$'\n'
-    local components ok_path err_path rtn
-    \set -- $(_cda::dir::split_at_error "$1"; \printf -- "$?\n")
-    ok_path=$1
-    err_path=$2
-    rtn=$3
+    local components ok_path err_path err_type
+    \set -- $(\sed -e 's/^/:/' <<< "$(_cda::dir::split_at_error "$1"; \printf -- "$?\n")")
+    ok_path=${1:1}
+    err_path=${2:1}
+    err_type=${3:1}
 
     # rich message
-    case $rtn in
-        1)      ok_path=$(_cda::text::color -f red -- "$ok_path")
-                err_path=$(_cda::text::color -f red -U -- "$err_path")
-                _cda::msg::error ERROR "No Such Path: " "" "$ok_path$err_path";;
-                
-        2)      ok_path=$(_cda::text::color -f magenta -- "$ok_path")
-                err_path=$(_cda::text::color -f magenta -U -- "$err_path")
-                _cda::msg::error ERROR "Permission Denied: " "" "$ok_path$err_path";;
-                
-        3|4|5)  ok_path=$(_cda::text::color -f red -- "$ok_path")
-                err_path=$(_cda::text::color -f red -U -- "$err_path")
-                _cda::msg::error ERROR "Not Directory: " "" "$ok_path$err_path";;
-    esac
-    return $rtn
+    if [[ $show_error == true ]]; then
+        case $err_type in
+            1)      ok_path=$(_cda::text::color -f red -- "$ok_path")
+                    err_path=$(_cda::text::color -f red -U -- "$err_path")
+                    _cda::msg::error ERROR "Path Not Exist: " "" "$ok_path$err_path";;
+                    
+            2)      ok_path=$(_cda::text::color -f magenta -- "$ok_path")
+                    err_path=$(_cda::text::color -f magenta -U -- "$err_path")
+                    _cda::msg::error ERROR "Permission Denied: " "" "$ok_path$err_path";;
+                    
+            3|4|5)  ok_path=$(_cda::text::color -f red -- "$ok_path")
+                    err_path=$(_cda::text::color -f red -U -- "$err_path")
+                    _cda::msg::error ERROR "Not Directory: " "" "$ok_path$err_path";;
+        esac
+    fi
+
+    return $err_type
 }
 
 # split dir path components at error
@@ -1955,7 +1964,7 @@ _cda::dir::subdirs()
 
 _cda::dir::select()
 {
-    if ! _cda::dir::check "${1-}"; then
+    if ! _cda::dir::check --show-error "${1-}"; then
         return 1
     fi
 
@@ -2009,7 +2018,7 @@ _cda::dir::select()
         fi
     fi
 
-    if ! _cda::dir::check "$new_abs_path"; then
+    if ! _cda::dir::check --show-error "$new_abs_path"; then
         return 1
     fi
     \printf -- "%s" "$new_abs_path"
