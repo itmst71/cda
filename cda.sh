@@ -1455,7 +1455,8 @@ _cda::list::remove()
 # -c --check / -C --clean
 _cda::list::check()
 {
-    local IFS=$' \n\t' clean=false args line name abs_path ok_path err_path err_type \
+    local IFS=$' \n\t' clean=false args line name abs_path \
+    ok_path err_path err_type \
     arr_not_exist arr_perm_denied arr_not_directory \
     arr_wrong_format arr_broken_data arr_out_lines \
     arr_tmp
@@ -1500,32 +1501,31 @@ _cda::list::check()
             fi
         fi
 
-        if [[ -d $abs_path && -r $abs_path && -x $abs_path && $(_cda::alias::validate --line --strict "$line") ]]; then
-            [[ $clean == true ]] && arr_out_lines+=("$line")
-            continue
+        if _cda::alias::validate --line --strict "$line"; then
+            # check path in the lightweight way
+            if [[ -d $abs_path && -r $abs_path && -x $abs_path ]]; then
+                [[ $clean == true ]] && arr_out_lines+=("$line")
+                continue
+            fi
+        else
+            arr_wrong_format+=("$(_cda::text::color -f yellow -U -- "${line%%/*}") $abs_path")
         fi
         
-        # add a dummy char(:) to each line and remove it after separating by set.
+        # check path in detail
+        # add a dummy char(:) to each line and remove it after separating by set
         \set -- $(\sed -e 's/^/:/' <<< "$(_cda::dir::split_at_error "$abs_path"; \printf -- "$?\n")")
         ok_path=${1:1}
         err_path=${2:1}
         err_type=${3:1}
 
-        formatted_line=$(_cda::alias::format "$name" "$abs_path")
-        name=$(\printf -- "%-${CDA_ALIAS_MAX_LEN}s" "$name")
-
         # store formatted and colored lines to each array by error type
         case $err_type in
-            0) [[ $clean == true ]] && arr_out_lines+=("$formatted_line");;
-            1) arr_not_exist+=("$name $ok_path$(_cda::text::color -f red -U -- "$err_path")");;
-            2) [[ $clean == true ]] && arr_out_lines+=("$formatted_line")
-               arr_perm_denied+=("$name $ok_path$(_cda::text::color -f yellow -U -- "$err_path")");;
-            3|4|5) arr_not_directory+=("$name $ok_path$(_cda::text::color -f red -U -- "$err_path")");;
+            0) [[ $clean == true ]] && arr_out_lines+=("$(_cda::alias::format "$name" "$abs_path")");;
+            1) arr_not_exist+=("$(\printf -- "%-${CDA_ALIAS_MAX_LEN}s" "$name") $ok_path$(_cda::text::color -f red -U -- "$err_path")");;
+            2) arr_perm_denied+=("$(\printf -- "%-${CDA_ALIAS_MAX_LEN}s" "$name") $ok_path$(_cda::text::color -f yellow -U -- "$err_path")")
+               [[ $clean == true ]] && arr_out_lines+=("$(_cda::alias::format "$name" "$abs_path")");;
+            3|4|5) arr_not_directory+=("$(\printf -- "%-${CDA_ALIAS_MAX_LEN}s" "$name") $ok_path$(_cda::text::color -f red -U -- "$err_path")");;
         esac
-
-        if ! _cda::alias::validate --line --strict "$line"; then
-            arr_wrong_format+=("$(_cda::text::color -f yellow -U -- "${line%%/*}") $abs_path")
-        fi
     done < <(_cda::list::print | \awk 'NF')
 
     # clear progress
