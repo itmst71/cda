@@ -1237,7 +1237,7 @@ _cda::list::select()
 
         local exact_match_line=
         if [[ $# -eq 1 ]]; then
-            exact_match_line=$(_cda::list::match -e "${1-}")
+            exact_match_line=$(_cda::list::match -e "${1-}" | head -n 1)
         fi
         local partial_match_lines="$(_cda::list::match -p "${@-}")"
         local partial_match_count="$(\grep -c "" <<< "$partial_match_lines")"
