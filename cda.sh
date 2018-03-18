@@ -1454,7 +1454,7 @@ _cda::list::remove()
 # -c --check / -C --clean
 _cda::list::check()
 {
-    local IFS=$' \n\t' clean=false args line name abs_path \
+    local IFS=$' \n\t' clean=false args line name abs_path prog_title=Checking \
     ok_path err_path err_type \
     arr_not_exist arr_perm_denied arr_not_directory \
     arr_wrong_format arr_broken_data arr_out_lines \
@@ -1468,7 +1468,7 @@ _cda::list::check()
     while [[ $# -ne 0 ]]
     do
         case "$1" in
-            --clean) clean=true; \shift;;
+            --clean) clean=true; prog_title=Cleaning; \shift;;
             -)  args+=("$1"); \shift;;
             --) \shift; args+=("$@"); \break;;
             -*) _cda::msg::internal_error "Illegal Option: " "$1"; return 1;;
@@ -1490,7 +1490,7 @@ _cda::list::check()
         fi
 
         # show progress
-        [[ $TTY_STDERR -eq 0 ]] && \printf >&2 "\r%-${cols}s" "Checking: $name"
+        [[ $TTY_STDERR -eq 0 ]] && \printf >&2 "\r%-${cols}s" "$prog_title: $name"
 
         if [[ -n "$args_str" ]]; then
             # filtering with alias names
