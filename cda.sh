@@ -30,7 +30,7 @@ _cda()
     #------------------------------------------------
     # app info
     declare -r APPNAME="cda"
-    declare -r VERSION="1.2.0 (2018-02-06)"
+    declare -r VERSION="1.3.0 (2018-03-19)"
 
     # override system variables
     local IFS=$' \t\n'
@@ -155,7 +155,7 @@ _cda()
         return 1
     fi
     declare -r ARG_C=${#Argv[@]}
-
+    
     
     #------------------------------------------------
     # Check the number of args
