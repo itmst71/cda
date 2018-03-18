@@ -1,4 +1,8 @@
 # Change Log
+## v1.3.0 (2018-03-19)
+* Improved the check and clean process
+* Better handling of broken data
+
 ## v1.2.0 (2018-02-06)
 * Added the config variable CDA_EXEC_NAME to change the name to execute cda
 * Fixed the bug that Auto-Alias feature did not work

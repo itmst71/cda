@@ -30,7 +30,7 @@ _cda()
     #------------------------------------------------
     # app info
     declare -r APPNAME="cda"
-    declare -r VERSION="1.2.0 (2018-02-06)"
+    declare -r VERSION="1.3.0 (2018-03-19)"
 
     # override system variables
     local IFS=$' \t\n'
@@ -113,6 +113,8 @@ _cda()
 
     # misc
     declare -r RTN_COMMAND_NOT_FOUND=127
+    declare -r FD_STDOUT=1
+    declare -r FD_STDERR=2
 
 
     #------------------------------------------------
@@ -153,7 +155,7 @@ _cda()
         return 1
     fi
     declare -r ARG_C=${#Argv[@]}
-
+    
     
     #------------------------------------------------
     # Check the number of args
@@ -300,7 +302,7 @@ _cda()
 
     # -C | --clean
     if _cda::flag::match $FLAG_CLEAN; then
-        _cda::list::clean "${Argv[@]-}"
+        _cda::list::check --clean "${Argv[@]-}"
         return $?
     fi
 
@@ -529,7 +531,7 @@ _cda::setup::list_files()
     do
         star="  "
         if [[ $name == $curr_name ]]; then
-            if _cda::msg::should_color 1; then
+            if _cda::msg::should_color $FD_STDOUT; then
                 name=$(_cda::text::color -f green -- "$name")
             fi
             star="* "
@@ -970,7 +972,7 @@ _cda::cd::cd()
     local abs_path="$(_cda::list::path "${@-}")"
     [[ -z $abs_path ]] && return 1
 
-    if ! _cda::dir::check "$abs_path"; then
+    if ! _cda::dir::check --show-error "$abs_path"; then
         return 1
     fi
 
@@ -998,6 +1000,7 @@ _cda::cd::cd()
 #------------------------------------------------
 _cda::alias::validate()
 {
+    local IFS=$' \t\n'
     local args type= strict= error= show_error=
     args=()
     while [[ $# -ne 0 ]]
@@ -1057,16 +1060,17 @@ _cda::alias::validate()
 
 _cda::alias::name()
 {
+    local IFS=$' \t\n'
     local line="${1-}"
     if ! _cda::alias::validate --line "$line"; then
         return 1
     fi
-    local IFS=$' \t\n'
-    \printf -- "%s" ${line%% *}
+    \printf -- "%s" ${line%%[ $'\t']*}
 }
 
 _cda::alias::path()
 {
+    local IFS=$' \t\n'
     local line="${1-}"
     if ! _cda::alias::validate --line "$line"; then
         return 1
@@ -1076,8 +1080,18 @@ _cda::alias::path()
 
 _cda::alias::format()
 {
-    [[ -z "${1-}" || -z "${2-}" ]] && return 1
-    \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$1" "$2"
+    local IFS=$' \t\n'
+    local name abs_path
+    if [[ "$1" == "--line" ]]; then
+        name=$(_cda::alias::name "${2-}")
+        abs_path=$(_cda::alias::path "${2-}")
+    else
+        name=$1
+        abs_path=$2
+    fi
+    
+    [[ -z "${name-}" || -z "${abs_path-}" ]] && return 1
+    \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$name" "$abs_path"
 }
 
 
@@ -1102,15 +1116,14 @@ _cda::list::print()
 
     if [[ -z "${args[@]-}" ]]; then
         if [[ "$names_only" == true ]]; then
-            \awk 'NF' "$USING_LIST_FILE" | \awk '{ print $1 }'
-            _cda::utils::check_pipes
+            \awk 'NF' "$USING_LIST_FILE" | \sort | \uniq | \awk '{ print $1 }'
         elif [[ "$paths_only" == true ]]; then
-            \awk 'NF' "$USING_LIST_FILE" \
+            \awk 'NF' "$USING_LIST_FILE" | \sort | \uniq \
             | \awk -F '/' '{printf "/";for(i=2;i<NF;i++){printf("%s%s",$i,OFS="/")} print $NF}'
-            _cda::utils::check_pipes
         else
-            \awk 'NF' "$USING_LIST_FILE"
+            \awk 'NF' "$USING_LIST_FILE" | \sort | \uniq
         fi
+        _cda::utils::check_pipes
     else
         if [[ "$names_only" == true ]]; then
             _cda::list::match -p "${args[@]-}" | \awk '{ print $1 }'
@@ -1128,7 +1141,7 @@ _cda::list::print()
 # -l --list
 _cda::list::list()
 {
-    if _cda::msg::should_color 1; then
+    if _cda::msg::should_color $FD_STDOUT; then
         _cda::list::print "$@" | _cda::list::highlight
         _cda::utils::check_pipes
     else
@@ -1223,7 +1236,7 @@ _cda::list::select()
 
         local exact_match_line=
         if [[ $# -eq 1 ]]; then
-            exact_match_line=$(_cda::list::match -e "${1-}")
+            exact_match_line=$(_cda::list::match -e "${1-}" | head -n 1)
         fi
         local partial_match_lines="$(_cda::list::match -p "${@-}")"
         local partial_match_count="$(\grep -c "" <<< "$partial_match_lines")"
@@ -1323,7 +1336,7 @@ _cda::list::add()
         rel_path=$(\pwd)
     fi
     local abs_path="$(_cda::path::to_abs "$rel_path")"
-    if ! _cda::dir::check "$abs_path"; then
+    if ! _cda::dir::check --show-error "$abs_path"; then
         return 1
     fi
 
@@ -1373,11 +1386,9 @@ _cda::list::remove()
 
     # with NO arg
     if [[ -z ${@-} ]]; then
-        if _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX"; then
-            line=$(_cda::list::print | \sed 's/^/\*\*\*REMOVE\*\*\*    :/' | _cda::cmd::exec FILTER -p | \sed 's/^\*\*\*REMOVE\*\*\*    ://')
-        else
-            line=$(_cda::list::print | \sed 's/^/\*\*\*REMOVE\*\*\*    /' | _cda::cmd::exec FILTER -p | \sed 's/^\*\*\*REMOVE\*\*\*    //')
-        fi
+        local prefix=
+        _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX" && prefix=:
+        line=$(_cda::list::print | \sed 's/^/\*\*\*REMOVE\*\*\*    '$prefix'/' | _cda::cmd::exec FILTER -p | \sed 's/^\*\*\*REMOVE\*\*\*    '$prefix'//')
 
         if [[ $? -eq $RTN_COMMAND_NOT_FOUND ]]; then
             return $RTN_COMMAND_NOT_FOUND
@@ -1394,7 +1405,7 @@ _cda::list::remove()
         do
             # with a path
             if [[ $name =~ (/|^[.~]) ]]; then
-                abs_path=$(_cda::abs_path::to_abs "$name")
+                abs_path=$(_cda::path::to_abs "$name")
                 if [[ -z $abs_path ]]; then
                     continue
                 fi
@@ -1440,101 +1451,224 @@ _cda::list::remove()
     \printf -- "%b\n" "$output_contents" > "$USING_LIST_FILE"
 }
 
-# -c --check
+# -c --check / -C --clean
 _cda::list::check()
 {
-    local line name abs_path title ok col ok_path= err_path rtn
-    local IFS=$'\n'
-    while read -r line || [[ -n $line ]]
+    local IFS=$' \n\t' clean=false args line name abs_path prog_title=Checking \
+    ok_path err_path err_type \
+    arr_not_exist arr_perm_denied arr_not_directory \
+    arr_wrong_format arr_broken_data arr_out_lines \
+    arr_tmp
+
+    args=() arr_not_exist=() arr_perm_denied=() arr_not_directory=()
+    arr_wrong_format=() arr_broken_data=() arr_out_lines=()
+    arr_tmp=()
+
+    # parse args
+    while [[ $# -ne 0 ]]
     do
-        name=$(_cda::alias::name "$line")
-        abs_path=$(_cda::alias::path "$line")
-
-        [[ -d $abs_path && -r $abs_path && -x $abs_path ]] \
-        && _cda::alias::validate --line --strict "$line" \
-        && continue
-
-        \set -- $(_cda::dir::split_at_error "$abs_path"; \printf -- "$?\n")
-        ok_path=$1
-        err_path=$2
-        rtn=$3
-
-        title=""
-        case $rtn in
-            1)  
-                title="No Such Path:"
-                col="red"
-                ;;
-            2)      
-                title="Access Denied:"
-                col="red"
-                ;;
-            3|4|5)
-                title="Not Directory:"
-                col="red"
-                ;;
-            *)
-                title="Wrong Format:"
-                col="yellow"
-                err_path=
-                ;;
+        case "$1" in
+            --clean) clean=true; prog_title=Cleaning; \shift;;
+            -)  args+=("$1"); \shift;;
+            --) \shift; args+=("$@"); \break;;
+            -*) _cda::msg::internal_error "Illegal Option: " "$1"; return 1;;
+            *)  args+=("$1"); \shift;;
         esac
+    done
 
-        title=$(\printf -- "%-14s %s" "$title")
-        name=$(\printf -- "%-${CDA_ALIAS_MAX_LEN}s %s" "$name")
-        
-        {   _cda::text::color -f $col -- "$title$name$ok_path"
-            _cda::text::color -f $col -U -n -- "$err_path"
-        } | _cda::msg::filter 2 >&2
-    done < <(_cda::list::print "${@-}")
-    return 0
-}
-
-# -C --clean
-_cda::list::clean()
-{
-    local line name abs_path title col remove_names reformatted_lines
-    remove_names=()
-    reformatted_lines=()
-    local IFS=$'\n'
-    while read -r line || [[ -n $line ]]
+    IFS=$'\n'
+    local args_str="${args[*]}"
+    local cols=$(tput cols)
+    while \read -r line || [[ -n $line ]]
     do
-        IFS=$' \t\n'
         name=$(_cda::alias::name "$line")
         abs_path=$(_cda::alias::path "$line")
-        
-        if [[ -d $abs_path && -r $abs_path && -x $abs_path ]]; then
-            if _cda::alias::validate --line --strict "$line"; then
-                continue;
-            fi
-            title="Format: "
-            col="green"
-            reformatted_lines+=("$(_cda::alias::format "$name" "$abs_path")")
-        else
-            title="Remove: "
-            col="green"
+
+        if [[ -z "$name" || -z "$abs_path" ]]; then
+            arr_broken_data+=("$line")
+            continue
         fi
-        remove_names+=("$name")
 
-        {   _cda::text::color -f $col -- "$title"
-            _cda::text::color -f $col -n -- "$(_cda::alias::format "$name" "$abs_path")"
-        } | _cda::msg::filter 2 >&2
-    done < <(_cda::list::print "${@-}")
+        # show progress
+        [[ $TTY_STDERR -eq 0 ]] && \printf >&2 "\r%-${cols}s" "$prog_title: $name"
 
-    # remove
-    [[ ${#remove_names[*]} -eq 0 ]] && return 0
-    local regexp="^($(_cda::text::join ' +|' ${remove_names[@]}) +)"
-    local contents="$(_cda::list::print | \tr "\t" " ")"
-    \grep -v -E "$regexp" <<< "$contents" | \awk 'NF' | \sort -u > "$USING_LIST_FILE"
-    local rtn=$?
+        if [[ -n "$args_str" ]]; then
+            # filtering with alias names
+            if [[ ! "$args_str" =~ ^$name$ ]]; then
+                [[ $clean == true ]] && arr_out_lines+=("$line")
+                continue
+            fi
+        fi
 
-    [[ ${#reformatted_lines[*]} -eq 0 ]] && return $rtn
+        if _cda::alias::validate --line --strict "$line"; then
+            # check path in the lightweight way
+            if [[ -d $abs_path && -r $abs_path && -x $abs_path ]]; then
+                [[ $clean == true ]] && arr_out_lines+=("$line")
+                continue
+            fi
+        else
+            arr_wrong_format+=("$(_cda::text::color -f yellow -U -- "${line%%/*}") $abs_path")
+        fi
+        
+        # check path in detail
+        # add a dummy char(:) to each line and remove it after separating by set
+        \set -- $(\sed -e 's/^/:/' <<< "$(_cda::dir::split_at_error "$abs_path"; \printf -- "$?\n")")
+        ok_path=${1:1}
+        err_path=${2:1}
+        err_type=${3:1}
 
-    # add re-formatted lines
-    IFS=$'\n'
-    contents=$(_cda::list::print)
-    \printf -- $"%b\n%b\n" "$contents" "${reformatted_lines[*]}" | \awk 'NF' | \sort -u > "$USING_LIST_FILE"
-    _cda::utils::check_pipes
+        # store formatted and colored lines to each array by error type
+        case $err_type in
+            0) [[ $clean == true ]] && arr_out_lines+=("$(_cda::alias::format "$name" "$abs_path")");;
+            1) arr_not_exist+=("$(\printf -- "%-${CDA_ALIAS_MAX_LEN}s" "$name") $ok_path$(_cda::text::color -f red -U -- "$err_path")");;
+            2) arr_perm_denied+=("$(\printf -- "%-${CDA_ALIAS_MAX_LEN}s" "$name") $ok_path$(_cda::text::color -f yellow -U -- "$err_path")")
+               [[ $clean == true ]] && arr_out_lines+=("$(_cda::alias::format "$name" "$abs_path")");;
+            3|4|5) arr_not_directory+=("$(\printf -- "%-${CDA_ALIAS_MAX_LEN}s" "$name") $ok_path$(_cda::text::color -f red -U -- "$err_path")");;
+        esac
+    done < <(_cda::list::print)
+
+    # clear progress
+    [[ $TTY_STDERR -eq 0 ]] && \printf >&2 "\r%-${cols}s\r" ""
+
+    # output by error type
+    local nl=
+    local indent="  "
+
+    # data broken
+    if [[ ${#arr_broken_data[*]} -ne 0 ]]; then
+        {   \printf -- "%s" "$nl"
+            _cda::msg::error FATAL "Broken Data" "" \
+            "$([[ $clean == true ]] && _cda::text::color -f green -- " -> Fixed (Removed)")"
+            \printf -- "$indent%b\n" ${arr_broken_data[*]}
+        } | _cda::msg::filter $FD_STDERR >&2
+        nl=$'\n'
+    fi
+
+    # not exist
+    if [[ ${#arr_not_exist[*]} -ne 0 ]]; then
+        {   \printf -- "%s" "$nl"
+            _cda::msg::error ERROR "Path Not Exist" "" \
+            "$([[ $clean == true ]] && _cda::text::color -f green -- " -> Fixed (Removed)")"
+            \printf -- "$indent%b\n" ${arr_not_exist[*]}
+        } | _cda::msg::filter $FD_STDERR >&2
+        nl=$'\n'
+    fi
+
+    # not directory
+    if [[ ${#arr_not_directory[*]} -ne 0 ]]; then
+        {   \printf -- "%s" "$nl"
+            _cda::msg::error ERROR "Not Directory" "" \
+            "$([[ $clean == true ]] && _cda::text::color -f green -- " -> Fixed (Removed)")"
+            \printf -- "$indent%b\n" ${arr_not_directory[*]}
+        } | _cda::msg::filter $FD_STDERR >&2
+        nl=$'\n'
+    fi
+
+    # permission denied
+    if [[ ${#arr_perm_denied[*]} -ne 0 ]]; then
+        {   \printf -- "%s" "$nl"
+            _cda::msg::error WARNING "Permission Denied" "" \
+            "$([[ $clean == true ]] && _cda::text::color -f yellow -- " -> Skipped (Fix by yourself)")"
+            \printf -- "$indent%b\n" ${arr_perm_denied[*]}
+        } | _cda::msg::filter $FD_STDERR >&2
+        nl=$'\n'
+    fi
+
+    # wrong format
+    if [[ ${#arr_wrong_format[*]} -ne 0 ]]; then
+        {   \printf -- "%s" "$nl"
+            _cda::msg::error WARNING "Wrong Format" "" \
+            "$([[ $clean == true ]] && _cda::text::color -f green -- " -> Fixed (Reformatted)")"
+            \printf -- "$indent%b\n" ${arr_wrong_format[*]}
+        } | _cda::msg::filter $FD_STDERR >&2
+        nl=$'\n'
+    fi
+
+    # duplicate path
+    local first=true
+    while \read -r dupl_path || [[ -n $dupl_path ]]
+    do
+        if [[ -n "$args_str" && -z "$(_cda::list::match -e "${args[@]}" | \sed 's/$/\/\//' | \grep "$dupl_path//")" ]]; then
+            continue
+        fi
+        while \read -r line || [[ -n $line ]]
+        do
+            line=$(_cda::alias::format --line "$line")
+            if [[ -z "$line" ]]; then
+                continue
+            fi
+            if [[ $first == true ]]; then
+                first=false
+                {   \printf -- "%s" "$nl"
+                    _cda::msg::error NOTICE "Duplicate Path" "" \
+                    "$([[ $clean == true ]] && _cda::text::color -f yellow -- " -> Skipped (Fix by yourself if you want)")"
+                } | _cda::msg::filter $FD_STDERR >&2
+                nl=$'\n'
+            fi
+            \printf -- "%s\n" "$indent$line" | _cda::msg::filter $FD_STDERR >&2
+        done < <(_cda::list::print | \sed 's/$/\/\//'| \grep "$dupl_path//" | \sed 's/\/\/$//')
+    done < <(_cda::list::print -p | \sort | \uniq -d)
+
+    # duplicate name
+    first=true
+    while \read -r dupl_name || [[ -n $dupl_name ]]
+    do
+        if [[ -n "$args_str" && ! "$args_str" =~ ^$dupl_name$ ]]; then
+            continue
+        fi
+        while \read -r line || [[ -n $line ]]
+        do
+            line=$(_cda::alias::format --line "$line")
+            if [[ -z "$line" ]]; then
+                continue
+            fi
+            if [[ $first == true ]]; then
+                first=false
+                {   \printf -- "%s" "$nl"
+                    _cda::msg::error CRITICAL "Duplicate Name" "" \
+                    "$([[ $clean == true ]] && _cda::text::color -f yellow -- " -> Skipped (Fix by yourself)")"
+                } | _cda::msg::filter $FD_STDERR >&2
+                nl=$'\n'
+            fi
+            \printf -- "%s\n" "$indent$line" | _cda::msg::filter $FD_STDERR >&2
+        done < <(_cda::list::match -e "$dupl_name")
+    done < <(_cda::list::print -n | \sort | \uniq -d)
+
+    # duplicate line
+    first=true
+    while \read -r dupl_line || [[ -n $dupl_line ]]
+    do
+        if [[ $clean == false ]]; then
+            name=$(_cda::alias::name "$dupl_line")
+            if [[ -n "$args_str" && ! "$args_str" =~ ^$name$ ]]; then
+                continue
+            fi
+        fi
+        while \read -r line || [[ -n $line ]]
+        do
+            line=$(_cda::alias::format --line "$line")
+            if [[ -z "$line" ]]; then
+                continue
+            fi
+            if [[ $first == true ]]; then
+                first=false
+                {   \printf -- "%s" "$nl"
+                    _cda::msg::error CRITICAL "Duplicate Line" "" \
+                    "$([[ $clean == true ]] && _cda::text::color -f green -- " -> Fixed (Merged)")"
+                } | _cda::msg::filter $FD_STDERR >&2
+            fi
+            \printf -- "%s\n" "$indent$line" | _cda::msg::filter $FD_STDERR >&2
+        done < <(\awk 'NF' "$USING_LIST_FILE" | \grep "$dupl_line")
+    done < <(\awk 'NF' "$USING_LIST_FILE" | \sort | \uniq -d)
+
+    # output cleaned lines 
+    if [[ $clean == true ]]; then
+        \printf -- "%s\n" "${arr_out_lines[@]}" | sort | uniq > "$USING_LIST_FILE"
+        _cda::utils::check_pipes
+        return $?
+    fi
+
+    return 0
 }
 
 
@@ -1713,33 +1847,42 @@ _cda::path::to_abs()
 #------------------------------------------------
 _cda::dir::check()
 {
+    local show_error=false
+    if [[ "${1-}" == --show-error ]]; then
+        show_error=true
+        \shift
+    fi
+
     if [[ -d ${1-} && -r ${1-} && -x ${1-} ]]; then
         return 0
     fi
 
     # split dir path components at error
     local IFS=$'\n'
-    local components ok_path err_path rtn
-    \set -- $(_cda::dir::split_at_error "$1"; \printf -- "$?\n")
-    ok_path=$1
-    err_path=$2
-    rtn=$3
+    local components ok_path err_path err_type
+    \set -- $(\sed -e 's/^/:/' <<< "$(_cda::dir::split_at_error "$1"; \printf -- "$?\n")")
+    ok_path=${1:1}
+    err_path=${2:1}
+    err_type=${3:1}
 
     # rich message
-    case $rtn in
-        1)      ok_path=$(_cda::text::color -f red -- "$ok_path")
-                err_path=$(_cda::text::color -f red -U -- "$err_path")
-                _cda::msg::error ERROR "No Such Path: " "" "$ok_path$err_path";;
-                
-        2)      ok_path=$(_cda::text::color -f magenta -- "$ok_path")
-                err_path=$(_cda::text::color -f magenta -U -- "$err_path")
-                _cda::msg::error ERROR "Permission Denied: " "" "$ok_path$err_path";;
-                
-        3|4|5)  ok_path=$(_cda::text::color -f red -- "$ok_path")
-                err_path=$(_cda::text::color -f red -U -- "$err_path")
-                _cda::msg::error ERROR "Not Directory: " "" "$ok_path$err_path";;
-    esac
-    return 1
+    if [[ $show_error == true ]]; then
+        case $err_type in
+            1)      ok_path=$(_cda::text::color -f red -- "$ok_path")
+                    err_path=$(_cda::text::color -f red -U -- "$err_path")
+                    _cda::msg::error ERROR "Path Not Exist: " "" "$ok_path$err_path";;
+                    
+            2)      ok_path=$(_cda::text::color -f magenta -- "$ok_path")
+                    err_path=$(_cda::text::color -f magenta -U -- "$err_path")
+                    _cda::msg::error ERROR "Permission Denied: " "" "$ok_path$err_path";;
+                    
+            3|4|5)  ok_path=$(_cda::text::color -f red -- "$ok_path")
+                    err_path=$(_cda::text::color -f red -U -- "$err_path")
+                    _cda::msg::error ERROR "Not Directory: " "" "$ok_path$err_path";;
+        esac
+    fi
+
+    return $err_type
 }
 
 # split dir path components at error
@@ -1818,7 +1961,7 @@ _cda::dir::subdirs()
 
 _cda::dir::select()
 {
-    if ! _cda::dir::check "${1-}"; then
+    if ! _cda::dir::check --show-error "${1-}"; then
         return 1
     fi
 
@@ -1847,7 +1990,7 @@ _cda::dir::select()
         local pad_width="$(($(\wc -c <<< "$dircnt") - 1))"
 
         if [[ -z "$(_cda::cmd::get filter)" ]]; then
-            if _cda::msg::should_color 2; then
+            if _cda::msg::should_color $FD_STDERR; then
                 _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 |  _cda::list::highlight >&2
             else
                 _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0
@@ -1872,7 +2015,7 @@ _cda::dir::select()
         fi
     fi
 
-    if ! _cda::dir::check "$new_abs_path"; then
+    if ! _cda::dir::check --show-error "$new_abs_path"; then
         return 1
     fi
     \printf -- "%s" "$new_abs_path"
@@ -2043,8 +2186,8 @@ _cda::msg::should_color()
         never)    return 1;;
         auto)     
             case "$fd" in
-                1) return $TTY_STDOUT;;
-                2) return $TTY_STDERR;;
+                $FD_STDOUT) return $TTY_STDOUT;;
+                $FD_STDERR) return $TTY_STDERR;;
                 *) return 1;;
             esac
             ;;
@@ -2066,6 +2209,7 @@ _cda::msg::filter()
 # formatted error message
 _cda::msg::error()
 {
+    local IFS=$' \t\n'
     local title="${1-}"
     local text="${2-}"
     local value="${3-}"
@@ -2080,10 +2224,12 @@ _cda::msg::error()
 
     local col=
     case "$(_cda::text::lower "$title")" in
-        notice)             col="-f green";;
+        info)               col="-f default";;
+        notice)             col="-f cyan";;
         warning|warn)       col="-f yellow";;
         error)              col="-f red";;
         "internal error")   col="-f yellow -b red";;
+        critical)           col="-f black -b red";;
         fatal)              col="-f white -b red";;
         *)                  col="-f default";;
     esac
