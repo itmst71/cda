@@ -441,6 +441,12 @@ Default is `true`.
 
         CDA_BASH_COMPLETION=true
 
+* CDA_MATCH_EXACT_ORDER
+Set to false if you want to use the second and subsequent arguments in no particular order for partial match search.  
+The default is `true`.
+
+        CDA_MATCH_EXACT_ORDER=true
+
 * CDA_CMD_FILTER  
 Specify the name or path of interactive filter commands to select an alias from list when no argument is given or multiple aliases are hit.  
 `-F` `--cmd-filter` can override this.
