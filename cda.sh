@@ -100,6 +100,7 @@ _cda()
     # default config variables
     declare -r CDA_EXEC_NAME_DEFAULT=cda
     declare -r CDA_BASH_COMPLETION_DEFAULT=true
+    declare -r CDA_MATCH_EXACT_ORDER_DEFAULT=true
     declare -r CDA_CMD_FILTER_DEFAULT="percol:peco:fzf:fzy"
     declare -r CDA_CMD_OPEN_DEFAULT="xdg-open:open:ranger:mc"
     declare -r CDA_CMD_EDITOR_DEFAULT="vim:nano:emacs:vi"
@@ -426,6 +427,7 @@ _cda::setup::init()
     fi
 
     CDA_FILTER_LINE_PREFIX="${CDA_FILTER_LINE_PREFIX:-$CDA_FILTER_LINE_PREFIX_DEFAULT}"
+    CDA_MATCH_EXACT_ORDER="${CDA_MATCH_EXACT_ORDER:-$CDA_MATCH_EXACT_ORDER_DEFAULT}"
 
     # set initialized flag
     CDA_INITIALIZED=true
@@ -654,6 +656,7 @@ _cda::config::create()
 << __EOCFG__ \cat > "$CONFIG_FILE"
 # CDA_EXEC_NAME=$CDA_EXEC_NAME_DEFAULT
 # CDA_BASH_COMPLETION=$CDA_BASH_COMPLETION_DEFAULT
+# CDA_MATCH_EXACT_ORDER=$CDA_MATCH_EXACT_ORDER_DEFAULT
 # CDA_CMD_FILTER=$CDA_CMD_FILTER_DEFAULT
 # CDA_CMD_OPEN=$CDA_CMD_OPEN_DEFAULT
 # CDA_CMD_EDITOR=$CDA_CMD_EDITOR_DEFAULT
@@ -675,6 +678,7 @@ CDA_SRC_FILE="$CDA_SRC_FILE"
 CDA_DATA_ROOT="$CDA_DATA_ROOT"
 CDA_EXEC_NAME=${CDA_EXEC_NAME:-$CDA_EXEC_NAME_DEFAULT}
 CDA_BASH_COMPLETION=${CDA_BASH_COMPLETION:-$CDA_BASH_COMPLETION_DEFAULT}
+CDA_MATCH_EXACT_ORDER=${CDA_MATCH_EXACT_ORDER:-$CDA_MATCH_EXACT_ORDER_DEFAULT}
 CDA_CMD_FILTER=${CDA_CMD_FILTER:-$CDA_CMD_FILTER_DEFAULT}
 CDA_CMD_OPEN=${CDA_CMD_OPEN:-$CDA_CMD_OPEN_DEFAULT}
 CDA_CMD_EDITOR=${CDA_CMD_EDITOR:-$CDA_CMD_EDITOR_DEFAULT}
@@ -1192,6 +1196,13 @@ _cda::list::match()
         if [[ ${#args[@]} -eq 1 ]]; then
             printf -- "%b\n" "$lines"
             return 0
+
+        # in an exact order
+        elif _cda::utils::is_true "$CDA_MATCH_EXACT_ORDER"; then
+            regexp="^($(_cda::text::join '[^ ]*' ${args[@]})[^ ]* +)"
+            lines="$(printf -- "%b" "$lines" | \grep -E "$regexp")"
+
+        # in no particular order
         else
             \unset args[0]
             args=("${args[@]}")
@@ -1201,9 +1212,9 @@ _cda::list::match()
                 regexp="^${firstArg}[^ ]*${name}[^ ]* +"
                 lines="$(printf -- "%b" "$lines" | \grep -E "$regexp")"
                 [[ -z "$lines" ]] && break
-            done 
-            [[ -n "$lines" ]] && printf -- "%b\n" "$lines"
+            done
         fi
+        [[ -n "$lines" ]] && printf -- "%b\n" "$lines"
     fi
 }
 
@@ -2548,9 +2559,16 @@ CONFIG VARIABLES
 
     [ CDA_BASH_COMPLETION ]
         Set to false if you don't want to use Bash-Completion.
-        The defalt is true.
+        The default is true.
 
             CDA_BASH_COMPLETION=true
+
+    [ CDA_MATCH_EXACT_ORDER ]
+        Set to false if you want to use the second and subsequent
+        arguments in no particular order for partial match search.
+        The default is true.
+
+            CDA_MATCH_EXACT_ORDER=$CDA_MATCH_EXACT_ORDER_DEFAULT
 
     [ CDA_CMD_FILTER ]
         Specify the name or path of interactive filter commands
@@ -2589,7 +2607,7 @@ CONFIG VARIABLES
 
     [ CDA_AUTO_ALIAS ]
         Set to false if you don't want to use the auto-alias in terminal
-        multiplexer feature. The defalt is true.
+        multiplexer feature. The default is true.
 
             CDA_AUTO_ALIAS=true
 

@@ -48,8 +48,7 @@ $ git clone https://github.com/itmst71/cda.git
 ## Homebrew
 
 ```console
-$ brew tap itmst71/tools
-$ brew install cda
+$ brew install itmst71/tools/cda
 ```
 
 * `source cda.sh` in `~/.bashrc` or `~/.zshrc`
@@ -182,33 +181,45 @@ $ cda -F fzf
 
 ### Internal Filter
 * `cda` itself also has the simple non-interactive filter.  
-***The first argument is always used for forward match searches.***
+***The first argument is always used for forward matching search.***
 ```console
-$ cda -l
-abcefg1       /qux/baz/bar/foo1
-abcgfe1       /qux/baz/bar/foo2
-abcabcefg1    /qux/baz/bar/foo3
-axcxyz1       /qux/baz/bar/foo4
-axcxyz11      /qux/baz/bar/foo5
-axcxyz121     /qux/baz/bar/foo6
-bbcefg1       /qux/baz/bar/foo7
-$ cda -l b
-bbcefg1       /qux/baz/bar/foo7
+$ cda --list-names       # Print only names
+lindows
+linux
+linuxmint
+lubuntu
+macosx
+manjarolinux
+
+$ cda --list-names l     # The first argument "l" is always used for forward matching
+lindows
+linux
+linuxmint
+lubuntu
 ```
 
-* The second and subsequent arguments are used for unordered partial AND match search after forward match search with the first argument.
+* The second and subsequent arguments are used in an exact order for partial matching.  
+
 ```console
-$ cda -l a f
-abcefg1       /qux/baz/bar/foo1
-abcgfe1       /qux/baz/bar/foo2
-abcabcefg1    /qux/baz/bar/foo3
-$ cda -l a f a
-abcabcefg1    /qux/baz/bar/foo3
-$ cda -l ax 11
-axcxyz11      /qux/baz/bar/foo5
-$ cda a 2
-$ pwd
-/qux/baz/bar/foo6
+$ cda --list-names l u t
+linuxmint
+lubuntu
+
+$ cda --list-names l t u
+lubuntu
+```
+
+* if you set `CDA_MATCH_EXACT_ORDER=false`, the second and subsequent arguments are used in no particular order.  
+This behavior is the same as `v1.3.0` or lower.
+
+```console
+$ cda --list-names l u t
+linuxmint
+lubuntu
+
+$ cda --list-names l t u
+linuxmint
+lubuntu
 ```
 
 ## Intermediate Level
@@ -440,6 +451,12 @@ Set to `false` if you don't want to use Bash-Completion.
 Default is `true`.
 
         CDA_BASH_COMPLETION=true
+
+* CDA_MATCH_EXACT_ORDER
+Set to false if you want to use the second and subsequent arguments in no particular order for partial match search.  
+The default is `true`.
+
+        CDA_MATCH_EXACT_ORDER=true
 
 * CDA_CMD_FILTER  
 Specify the name or path of interactive filter commands to select an alias from list when no argument is given or multiple aliases are hit.  
