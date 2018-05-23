@@ -371,6 +371,14 @@ _cda::setup::init()
         \printf -- "cda: ERROR: Invalid Value: CDA_EXEC_NAME in \"$CDA_DATA_ROOT/config\"\n"
         return 1
     fi
+
+    # unalias $CDA_EXEC_NAME to avoid eval error when re-sourcing .bashrc or .zshrc
+    # in case the real alias with the same name of $CDA_EXEC_NAME has been set by alias command.
+    if [[ -n "$(\alias $CDA_EXEC_NAME 2>/dev/null)" ]]; then
+        \unalias "$CDA_EXEC_NAME"
+    fi
+
+    # define the function with the name of $CDA_EXEC_NAME
     eval "$CDA_EXEC_NAME()
     {
         local tmp_argv arg
