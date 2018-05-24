@@ -101,9 +101,9 @@ _cda()
     declare -r CDA_EXEC_NAME_DEFAULT=cda
     declare -r CDA_BASH_COMPLETION_DEFAULT=true
     declare -r CDA_MATCH_EXACT_ORDER_DEFAULT=true
-    declare -r CDA_CMD_FILTER_DEFAULT="percol:peco:fzf:fzy"
+    declare -r CDA_CMD_FILTER_DEFAULT="peco:percol:fzf:fzy"
     declare -r CDA_CMD_OPEN_DEFAULT="xdg-open:open:ranger:mc"
-    declare -r CDA_CMD_EDITOR_DEFAULT="vim:nano:emacs:vi"
+    declare -r CDA_CMD_EDITOR_DEFAULT="vim:vi:nano:emacs"
     declare -r CDA_ALIAS_MAX_LEN_DEFAULT=16
     declare -r CDA_COLOR_MODE_DEFAULT=auto
     declare -r CDA_BUILTIN_CD_DEFAULT=false

@@ -462,7 +462,7 @@ The default is `true`.
 Specify the name or path of interactive filter commands to select an alias from list when no argument is given or multiple aliases are hit.  
 `-F` `--cmd-filter` can override this.
 
-        CDA_CMD_FILTER=percol:peco:fzf:fzy
+        CDA_CMD_FILTER=peco:percol:fzf:fzy
 
 * CDA_CMD_OPEN  
 Specify the name or path of file manager commands to open the path when using `-o` `--open`.  
@@ -474,7 +474,7 @@ Specify the name or path of file manager commands to open the path when using `-
 Specify a name or path of editor commands to edit the list file with `-e` `--edit` or the config file with `--config`.  
 `-E --cmd-editor` can override this.
 
-        CDA_CMD_EDITOR=vim:nano:emacs:vi
+        CDA_CMD_EDITOR=vim:vi:nano:emacs
 
 * CDA_FILTER_LINE_PREFIX  
 Set to true to add a colon prefix to each line of the list passed to the filter. It will help you to match the beginning of the line.
