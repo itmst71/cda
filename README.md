@@ -23,7 +23,6 @@
 * Manages alias names in a text file
 * Supports interactive filters like `percol`, `peco`, `fzf`, `fzy` etc...
 * Supports `bash-completion`
-* Supports terminal multiplexers (`tmux` and `GNU screen`)
 
 # Requirements
 * Bash 3.2+ / Zsh 5.0+
@@ -359,59 +358,6 @@ $ pwd
 /home/user/troublesome_names_for_input/日本語
 ```
 
-### Auto-Alias for Terminal Multiplexer
-* When `cd` in `tmux` or `GNU screen` session, alias is automatically added / removed using session name, window number and pane number.  
-So you can easily `cd` by using aliases added in another session or another window.
-
-* This feature can be enabled by setting `CDA_AUTO_ALIAS` to `true`.
-
-* `-m` `--multiplexer` temporarily switches to auto alias list for terminal multiplexer.
-```console
-$ tmux ls
-dev1: 1 windows (created Tue Feb 07 01:24:11 2017) [80x19] (attatched)
-ssh: 1 windows (created Tue Feb 07 01:24:33 2017) [80x19] (attatched)
-$ screen -ls
-There is a screen on:
-        306.dev2        (Attached)
-        6434.pts-13.myhost     (Attached)
-1 Socket in /tmp/uscreens/S-itmst71.
-$ cda -m -l
-13_0            /baz/bar
-dev1_0_0        /baz
-dev1_0_1        /baz/bar/foo
-dev2_0          /quux/qux/baz2/bar/foo
-dev2_1          /qux/baz/bar/foo
-ssh_0_0         /quux/qux/baz/bar/foo
-$ cda -m dev2_0
-$ pwd
-/quux/qux/baz2/bar/foo
-```
-
-* Of course you can use tab completion and filters.
-```console
-$ cda -m d<TAB>
-$ cda -m dev
-QUERY>                                       (1/4) [1/1]
-:dev1_0_0        /baz
-:dev1_0_1        /baz/bar/foo
-:dev2_0          /quux/qux/baz2/bar/foo
-:dev2_1          /qux/baz/bar/foo
-```
-
-* If you specify `-` as the alias name, you can `cd` to the directory you executed `cd` last in all sessions.
-```console
-$ cda -m -
-```
-
-* The auto-alias list and auto-pwd file are automatically created in `~/.cda/lists` as `.autolist` and `.autopwd` respectively.
-```console
-$ ls -a ~/.cda/lists
-.  ..  .autolist  .autopwd  default
-```
-
-* The auto-alias is realized by hooking `cd`.  
-You can change the hook type with the `CDA_AUTO_ALIAS_HOOK_TYPE` variable.
-
 # Config Variables
 ## Specification
 * By default, configuration variables can be defined with the following file:
@@ -486,21 +432,6 @@ Set to `true` if you do not want to affect or be affected by external cd extensi
 `-B` `--builtin-cd` can override this and temporarily set to `true`. Default is `false`.
 
         CDA_BUILTIN_CD=false
-
-* CDA_AUTO_ALIAS  
-Set to `true` if you want to use the [auto-alias feature](#auto-alias-for-terminal-multiplexer).  
-Default is `false`.
-
-        CDA_AUTO_ALIAS=false
-
-* CDA_AUTO_ALIAS_HOOK_TYPE  
-Specify one of [`function`, `prompt`, `chpwd`] as the hook type for the auto-alias feature which is realized by hooking `cd`.  
-`function` overrides `cd` command with the `Bash` function.  
-`prompt` adds the hook function to `PROMPT_COMMAND` variable.  
-`chpwd` adds the hook function with `add-zsh-hook`. Only `Zsh` can use `chpwd`.
-
-        CDA_AUTO_ALIAS_HOOK_TYPE=function     # Bash
-        CDA_AUTO_ALIAS_HOOK_TYPE=chpwd        # Zsh
 
 * CDA_COLOR_MODE  
 Specify one of [`never`, `always`, `auto`] as the color mode of the output message.  
