@@ -53,9 +53,6 @@ _cda()
     declare -r LIST_DIR="$CDA_DATA_ROOT/$LIST_DIR_NAME"
     declare -r LIST_DEFAULT_NAME="default"
     declare -r LIST_NAME_FILE="$CDA_DATA_ROOT/listname"
-    declare -r AUTO_ALIAS_LIST_NAME=".autolist"
-    declare -r AUTO_ALIAS_LIST_FILE="$LIST_DIR/$AUTO_ALIAS_LIST_NAME"
-    declare -r AUTO_ALIAS_PWD_FILE="$LIST_DIR/.autopwd"
 
     # flags
     declare -r FLAG_NONE=0
@@ -80,13 +77,11 @@ _cda()
     declare -r FLAG_LIST_PATHS=$((1<<18))
     declare -r FLAG_CHECK=$((1<<19))
     declare -r FLAG_CLEAN=$((1<<20))
-    declare -r FLAG_MULTIPLEXER=$((1<<21))
-    declare -r FLAG_OVERWRITE=$((1<<22))
-    declare -r FLAG_FILTER_FORCED=$((1<<23))
-    declare -r FLAG_SUBDIR=$((1<<24))
-    declare -r FLAG_UPDATE_AUTOALIAS=$((1<<25))
-    declare -r FLAG_BUILTIN_CD=$((1<<26))
-    declare -r FLAG_VERBOSE=$((1<<27))
+    declare -r FLAG_OVERWRITE=$((1<<21))
+    declare -r FLAG_FILTER_FORCED=$((1<<22))
+    declare -r FLAG_SUBDIR=$((1<<23))
+    declare -r FLAG_BUILTIN_CD=$((1<<24))
+    declare -r FLAG_VERBOSE=$((1<<25))
     
     declare -r FLAGS_INCOMPAT=$((
           FLAG_HELP_SHORT | FLAG_HELP_FULL | FLAG_VERSION
@@ -94,8 +89,7 @@ _cda()
         | FLAG_EDIT_LIST | FLAG_EDIT_CONFIG | FLAG_PATH
         | FLAG_LIST_NAMES | FLAG_LIST_PATHS | FLAG_LIST
         | FLAG_LIST_FILES | FLAG_OPEN | FLAG_USE | FLAG_REMOVE_LIST
-        | FLAG_CHECK | FLAG_CLEAN | FLAG_SHOW_CONFIG
-        | FLAG_UPDATE_AUTOALIAS))
+        | FLAG_CHECK | FLAG_CLEAN | FLAG_SHOW_CONFIG))
 
     # default config variables
     declare -r CDA_EXEC_NAME_DEFAULT=cda
@@ -107,8 +101,6 @@ _cda()
     declare -r CDA_ALIAS_MAX_LEN_DEFAULT=16
     declare -r CDA_COLOR_MODE_DEFAULT=auto
     declare -r CDA_BUILTIN_CD_DEFAULT=false
-    declare -r CDA_AUTO_ALIAS_DEFAULT=false
-    declare -r CDA_AUTO_ALIAS_HOOK_TYPE_DEFAULT="$([[ -n ${ZSH_VERSION-} ]] && \printf "chpwd" || \printf "function")"
     declare -r CDA_LIST_HIGHLIGHT_COLOR_DEFAULT="0;0;32"
     declare -r CDA_FILTER_LINE_PREFIX_DEFAULT=true
 
@@ -200,15 +192,6 @@ _cda()
         if [[ $? -ne 0 ]]; then
             return 1
         fi
-    fi
-
-    # -m --multiplexer : temporarily switch to the auto-alias list
-    if _cda::flag::match $FLAG_MULTIPLEXER; then
-        _cda::setup::use --temp "$AUTO_ALIAS_LIST_NAME"
-        if [[ $? -ne 0 ]]; then
-            return 1
-        fi
-        _cda::autoalias::clear
     fi
 
     # -L --list-files
@@ -307,12 +290,6 @@ _cda()
         return $?
     fi
 
-    # --update-autoalias
-    if _cda::flag::match $FLAG_UPDATE_AUTOALIAS; then
-        _cda::autoalias::update
-        return $?
-    fi
-
 
     #------------------------------------------------
     # Actions that do not require aliases
@@ -391,34 +368,6 @@ _cda::setup::init()
         fi
         _cda \"\${tmp_argv[@]}\"
     }"
-
-    # hook cd for the Auto-Alias feature
-    CDA_AUTO_ALIAS="${CDA_AUTO_ALIAS:-$CDA_AUTO_ALIAS_DEFAULT}"
-    CDA_AUTO_ALIAS_HOOK_TYPE="${CDA_AUTO_ALIAS_HOOK_TYPE:-$CDA_AUTO_ALIAS_HOOK_TYPE_DEFAULT}"
-    if [[ -n ${TMUX-} || -n ${STY-} ]]; then
-        if _cda::utils::is_true "$CDA_AUTO_ALIAS"; then
-            case "$CDA_AUTO_ALIAS_HOOK_TYPE" in
-                function)
-                    cd()
-                    {
-                        builtin cd "$@"
-                        [[ $? -ne 0 ]] && return 1
-                        _cda::autoalias::chpwd
-                        return 0
-                    };;
-                prompt)
-                    PROMPT_COMMAND=$(\printf -- "%s" "${PROMPT_COMMAND%;}; _cda::autoalias::chpwd;")
-                    ;;
-                chpwd)
-                    if [[ -n ${ZSH_VERSION-} ]]; then
-                        \autoload -Uz add-zsh-hook
-                        \add-zsh-hook chpwd _cda::autoalias::chpwd
-                    else
-                        \printf -- "cda: WARNING: CDA_AUTO_ALIAS_HOOK_TYPE=chpwd works only in zsh\n"
-                    fi
-            esac
-        fi
-    fi
 
     # configure Bash-Completion
     CDA_BASH_COMPLETION="${CDA_BASH_COMPLETION:-$CDA_BASH_COMPLETION_DEFAULT}"
@@ -513,22 +462,6 @@ _cda::setup::paths()
         return 1
     fi
 
-    # does the auto-alias list file exist?
-    if [[ ! -e $AUTO_ALIAS_LIST_FILE ]]; then
-        if ! \touch -- "$AUTO_ALIAS_LIST_FILE"; then
-            _cda::msg::error FATAL "Could not create the auto-alias list file: " "$AUTO_ALIAS_LIST_FILE"
-            return 1
-        fi
-    fi
-
-    # does the auto-pwd file exist?
-    if [[ ! -e $AUTO_ALIAS_PWD_FILE ]]; then
-        if ! \touch -- "$AUTO_ALIAS_PWD_FILE"; then
-            _cda::msg::error FATAL "Could not create the auto-pwd file: " "$AUTO_ALIAS_PWD_FILE"
-            return 1
-        fi
-    fi
-
     return 0
 }
 
@@ -603,7 +536,7 @@ _cda::setup::use()
     # temporarily change
     if [[ $temp == true ]]; then
         # validate the name of the specified using list 
-        if [[ $list_name != $AUTO_ALIAS_LIST_NAME && ! $list_name =~ ^[a-zA-Z0-9_]+$ ]]; then
+        if [[ ! $list_name =~ ^[a-zA-Z0-9_]+$ ]]; then
             _cda::msg::error ERROR "The list name can not include characters other than \"a-zA-Z0-9_\""
             return 1
         fi
@@ -670,8 +603,6 @@ _cda::config::create()
 # CDA_CMD_EDITOR=$CDA_CMD_EDITOR_DEFAULT
 # CDA_FILTER_LINE_PREFIX=$CDA_FILTER_LINE_PREFIX_DEFAULT
 # CDA_BUILTIN_CD=$CDA_BUILTIN_CD_DEFAULT
-# CDA_AUTO_ALIAS=$CDA_AUTO_ALIAS_DEFAULT
-# CDA_AUTO_ALIAS_HOOK_TYPE=$CDA_AUTO_ALIAS_HOOK_TYPE_DEFAULT
 # CDA_COLOR_MODE=$CDA_COLOR_MODE_DEFAULT
 # CDA_LIST_HIGHLIGHT_COLOR="$CDA_LIST_HIGHLIGHT_COLOR_DEFAULT"
 # CDA_ALIAS_MAX_LEN=$CDA_ALIAS_MAX_LEN_DEFAULT
@@ -692,8 +623,6 @@ CDA_CMD_OPEN=${CDA_CMD_OPEN:-$CDA_CMD_OPEN_DEFAULT}
 CDA_CMD_EDITOR=${CDA_CMD_EDITOR:-$CDA_CMD_EDITOR_DEFAULT}
 CDA_FILTER_LINE_PREFIX=${CDA_FILTER_LINE_PREFIX:-$CDA_FILTER_LINE_PREFIX_DEFAULT}
 CDA_BUILTIN_CD=${CDA_BUILTIN_CD:-$CDA_BUILTIN_CD_DEFAULT}
-CDA_AUTO_ALIAS=${CDA_AUTO_ALIAS:-$CDA_AUTO_ALIAS_DEFAULT}
-CDA_AUTO_ALIAS_HOOK_TYPE=${CDA_AUTO_ALIAS_HOOK_TYPE:-$CDA_AUTO_ALIAS_HOOK_TYPE_DEFAULT}
 CDA_COLOR_MODE=${CDA_COLOR_MODE:-$CDA_COLOR_MODE_DEFAULT}
 CDA_LIST_HIGHLIGHT_COLOR="${CDA_LIST_HIGHLIGHT_COLOR:-$CDA_LIST_HIGHLIGHT_COLOR_DEFAULT}"
 CDA_ALIAS_MAX_LEN=$CDA_ALIAS_MAX_LEN
@@ -743,7 +672,6 @@ _cda::option::to_flag()
         -p | --path)            \printf -- $FLAG_PATH;;
         -r | --remove)          \printf -- $FLAG_REMOVE;;
         -R | --remove-list)     \printf -- $FLAG_REMOVE_LIST;;
-        -m | --multiplexer)     \printf -- $FLAG_MULTIPLEXER;;
         -s | --subdir)          \printf -- $FLAG_SUBDIR;;
         -u | --use-temp)        \printf -- $FLAG_USE_TEMP;;
         -U | --use)             \printf -- $FLAG_USE;;
@@ -753,7 +681,6 @@ _cda::option::to_flag()
         --list-paths)           \printf -- $FLAG_LIST_PATHS;;
         --config)               \printf -- $FLAG_EDIT_CONFIG;;
         --show-config)          \printf -- $FLAG_SHOW_CONFIG;;
-        --update-autoalias)     \printf -- $FLAG_UPDATE_AUTOALIAS;;
 
         -E | --cmd-editor)      \printf -- $FLAG_NONE;;
         -F | --cmd-filter)      \printf -- $FLAG_NONE;;
@@ -864,14 +791,12 @@ _cda::option::parse()
             -o | --open | \
             -p | --path | \
             -r | --remove | \
-            -m | --multiplexer | \
             -s | --subdir | \
             -v | --verbose | \
             --version | \
             --list-names | \
             --list-paths | \
-            --config | --show-config | \
-            --update-autoalias \
+            --config | --show-config \
             )
                 _cda::option::set $optname || return 1
                 \shift
@@ -921,7 +846,7 @@ _cda::option::parse()
                 done
 
                 # clustered short options requiring NO argument
-                for op in B c C e f h H l L m o p r s v
+                for op in B c C e f h H l L o p r s v
                 do
                     [[ ! $optname =~ ${op} ]] && continue
                     detected_opts="${detected_opts}$op"
@@ -992,13 +917,6 @@ _cda::cd::cd()
     if _cda::flag::match $FLAG_BUILTIN_CD || _cda::utils::is_true "${CDA_BUILTIN_CD-}"; then
         builtin cd "$abs_path"
         rtn=$?
-
-        # instead of the hook function overriding cd command
-        if [[ rtn -eq 0 ]] \
-        && _cda::utils::is_true "${CDA_AUTO_ALIAS}" \
-        && [[ (-n ${TMUX-} || -n ${STY-}) && "$CDA_AUTO_ALIAS_HOOK_TYPE" == "function" ]]; then
-            _cda::autoalias::chpwd
-        fi
     else
         cd "$abs_path"
         rtn=$?
@@ -1310,15 +1228,9 @@ _cda::list::path()
         abs_path=$(_cda::dir::select "${@-}" "$Optarg_number")
     
     elif ! _cda::list::is_empty; then
-        # with the last session path
-        if _cda::flag::match $FLAG_MULTIPLEXER && [[ "${1-}" == "-" ]]; then
-            abs_path=$(_cda::autoalias::lastpwd)
-
         # with an alias name
-        else
-            local line="$(_cda::list::select "$@")"
-            abs_path="$(_cda::alias::path "$line")"
-        fi
+        local line="$(_cda::list::select "$@")"
+        abs_path="$(_cda::alias::path "$line")"
 
         # -s --subdir
         if [[ -n $abs_path ]] && _cda::flag::match $FLAG_SUBDIR; then
@@ -1689,113 +1601,6 @@ _cda::list::check()
 
     return 0
 }
-
-
-#------------------------------------------------
-# _cda::autoalias
-#------------------------------------------------
-
-# chpwd is called directly from cd hooked
-_cda::autoalias::chpwd()  
-{
-    [[ -z ${TMUX-} && -z ${STY-} ]] && return 0
-    [[ "$PWD" == "$OLDPWD" ]] && return 0
-    _cda -m --update-autoalias
-    return 0
-}
-
-# --update-autoalias
-_cda::autoalias::update()
-{
-    [[ -z ${TMUX-} && -z ${STY-} ]] && return 1
-
-    local IFS=$' \t\n' line session hostname winpane alias_name
-
-    # tmux
-    if [[ -n ${TMUX-} ]]; then
-        line="$(\tmux display -p "#S:#I_#P")"
-        session="${line%%:*}"
-        winpane="${line#*:}"
-        if ! _cda::alias::validate --name "$session"; then
-            session=$(\sed -e 's/[^a-zA-Z0-9_]/_/g' <<< "$session")
-        fi
-        alias_name="${session}_${winpane}"
-
-    # GNU screen
-    elif [[ -n ${STY-} ]]; then
-        session="${STY#*.}"
-        hostname="$(\hostname)"
-        hostname="${hostname%%.*}"
-        if [[ $session =~ ^[a-z]+-?[0-9]+\.$hostname$ ]]; then
-            session="$(\sed -e 's/^[^0-9]\{1,\}-\{0,1\}\([0-9]\{1,\}\)\..*$/\1/' <<< "$session")"
-            session=$(\printf -- "%d" $((10#${session})))
-        else
-            if ! _cda::alias::validate --name "$session"; then
-                session=$(\sed -e 's/[^a-zA-Z0-9_]/_/g' <<< "$session")
-            fi
-        fi
-        alias_name="${session}_${WINDOW}"
-    fi
-    _cda::flag::set $FLAG_ADD_FORCED
-    _cda::list::add "$alias_name" "$(\pwd)"
-    \pwd > "$AUTO_ALIAS_PWD_FILE"
-}
-
-_cda::autoalias::clear()
-{
-    local IFS=$'\n'
-    local names line session hostname alias_name
-    names=()
-
-    # tmux
-    if _cda::cmd::exist tmux; then
-        while IFS= \read -r line || [[ -n "$line" ]]
-        do
-            session="${line%%:*}"
-            if ! _cda::alias::validate --name "$session"; then
-                session=$(\sed -e 's/[^a-zA-Z0-9_]/_/g' <<< "$session")
-            fi
-            alias_name="${session}_[0-9]+_[0-9]+"
-            names+=("$alias_name")
-        done < <(\tmux ls 2>/dev/null | \grep -E -- '^[^:]+:[ '$'\t'']+[0-9]+[ '$'\t'']+')
-    fi
-
-    # GNU screen
-    if _cda::cmd::exist screen; then
-        hostname="$(\hostname)"
-        hostname="${hostname%%.*}"     
-        while IFS= \read -r line || [[ -n $line ]]
-        do
-            line=$(_cda::text::trim "$line")
-            session="${line#*.}"
-            if [[ $session =~ ^[a-z]+-?[0-9]+\.$hostname$ ]]; then
-                session=$(\sed -e 's/^[^0-9]\{1,\}-\{0,1\}\([0-9]\{1,\}\)\..*$/\1/' <<< "$session")
-                session=$(\printf -- "%d" $((10#${session})))
-            else
-                if ! _cda::alias::validate --name "$session"; then
-                    session=$(\sed -e 's/[^a-zA-Z0-9_]/_/g' <<< "$session")
-                fi
-            fi
-            alias_name="${session}_[0-9]+"
-            names+=("$alias_name")
-        done < <(\screen -ls 2>/dev/null | \grep -E -- '^[ '$'\t'']+[0-9]+\.' | \sed -e 's/(.*)$//')
-    fi
-    if [[ ${#names[*]} -eq 0 ]]; then
-        [[ -s $USING_LIST_FILE ]] && : > "$USING_LIST_FILE"
-        return $?
-    fi
-    
-    local regexp="^($(_cda::text::join ' +|' ${names[@]}) +)"
-    local contents="$(_cda::list::print | \tr "\t" " ")"
-    \grep -E "$regexp" <<< "$contents" | \awk 'NF' | \sort -u > "$USING_LIST_FILE"
-    _cda::utils::check_pipes
-}
-
-_cda::autoalias::lastpwd()
-{
-    \cat 2>/dev/null -- "$AUTO_ALIAS_PWD_FILE"
-}
-
 
 #------------------------------------------------
 # _cda::utils
@@ -2399,7 +2204,6 @@ URL         : https://github.com/itmst71/cda
 Required    : Bash 3.2+ / Zsh 5.0+, Some POSIX commands
 Optional    : Interactive Filter(percol, peco, fzf, fzy etc...)
             : Bash-completion
-            : Terminal Multiplexer(tmux or GNU screen)
 Description : Executes cd with an alias name.
               Supports interactive filters and bash-completion.
 ------------------------------------------------------------------------
@@ -2482,10 +2286,6 @@ OPTIONS
     -C | --clean [ALIAS_NAME [ALIAS_NAME ...]]
         Check the existence of alias paths and remove them
         that do not exist. Also re-format wrong format lines.
-
-    -m | --multiplexer
-        Temporarily switch to auto alias list for terminal
-        multiplexer.
 
     -s | --subdir
         Select a subdirectory in the alias path with a filter.
@@ -2613,20 +2413,6 @@ CONFIG VARIABLES
 
             CDA_BUILTIN_CD=false
 
-    [ CDA_AUTO_ALIAS ]
-        Set to false if you don't want to use the auto-alias in terminal
-        multiplexer feature. The default is true.
-
-            CDA_AUTO_ALIAS=true
-
-    [ CDA_AUTO_ALIAS_HOOK_TYPE ]
-        Specify one of [function prompt chpwd] as the hook type of
-        cd for the auto-alias in terminal multiplexer feature.
-        Only Zsh can use chpwd.
-
-            CDA_AUTO_ALIAS_HOOK_TYPE=function     # Bash
-            CDA_AUTO_ALIAS_HOOK_TYPE=chpwd        # Zsh
-
     [ CDA_COLOR_MODE ]
         Specify one of [never always auto] as the color mode 
         of the output message. When auto is selected, it will automatically
@@ -2730,7 +2516,6 @@ _cda::completion::exec()
                 -p --path
                 -r --remove
                 -R --remove-list
-                -m --multiplexer
                 -s --subdir
                 -U --use
                 -u --use-temp
@@ -2763,21 +2548,15 @@ _cda::completion::exec()
 
     # complements an alias name
     else
-        # -m --multiplexer
-        if [[ $COMP_LINE =~ \ (-[a-zA-Z0-9]*m[a-zA-Z0-9]*|--multiplexer)\  ]]; then
-            [[ $COMP_LINE =~ \ [a-zA-Z0-9_]+\  ]] && return 0
-            COMPREPLY=($(\compgen -W "$(_cda -m --list-names  2>/dev/null)" -- "$curr"))
-            return $?
-
         # -u use-temp
-        elif [[ $COMP_LINE =~ \ (-[a-zA-Z0-9]*u|--use-temp)\ +[a-zA-Z0-9_]+\ + ]]; then
+        if [[ $COMP_LINE =~ \ (-[a-zA-Z0-9]*u|--use-temp)\ +[a-zA-Z0-9_]+\ + ]]; then
             local using="$(\sed -e 's/^.* \{1,\}\(-[a-zA-Z0-9]*u\|--use-temp\) \{1,\}\([a-zA-Z0-9_]+\) \{1,\}.*$/\2/' <<< "$COMP_LINE")"
             COMPREPLY=($(\compgen -W "$(_cda -u $using --list-names  2>/dev/null)" -- "$curr"))
             return $?
 
         # aliases in the current list
         else
-            COMPREPLY=($(\compgen -W "$(_cda --list-names  2>/dev/null)" -- "$curr"))
+            COMPREPLY=($(\compgen -W "$(_cda --list-names 2>/dev/null)" -- "$curr"))
             return $?
         fi
     fi
