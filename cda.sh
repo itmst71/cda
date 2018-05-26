@@ -53,6 +53,7 @@ _cda()
     declare -r LIST_DIR="$CDA_DATA_ROOT/$LIST_DIR_NAME"
     declare -r LIST_DEFAULT_NAME="default"
     declare -r LIST_NAME_FILE="$CDA_DATA_ROOT/listname"
+    declare -r LAST_PATH_FILE="$LIST_DIR/.lastpath"
 
     # flags
     declare -r FLAG_NONE=0
@@ -354,9 +355,9 @@ _cda::setup::init()
     if [[ -n "$(\alias $CDA_EXEC_NAME 2>/dev/null)" ]]; then
         \unalias "$CDA_EXEC_NAME"
     fi
-
+    
     # define the function with the name of $CDA_EXEC_NAME
-    eval "$CDA_EXEC_NAME()
+    \eval "$CDA_EXEC_NAME()
     {
         local tmp_argv arg
         tmp_argv=(\"\$@\")
@@ -460,6 +461,14 @@ _cda::setup::paths()
     if [[ ! -r $CONFIG_FILE ]]; then
         _cda::msg::error FATAL "Could not read a file: " "$CONFIG_FILE"
         return 1
+    fi
+
+    # does the lastpath file exist?
+    if [[ ! -e $LAST_PATH_FILE ]]; then
+        if ! \touch -- "$LAST_PATH_FILE"; then
+            _cda::msg::error FATAL "Could not create the last path file: " "$LAST_PATH_FILE"
+            return 1
+        fi
     fi
 
     return 0
@@ -921,6 +930,10 @@ _cda::cd::cd()
         cd "$abs_path"
         rtn=$?
     fi
+
+    if [[ $rtn -eq 0 ]]; then
+        \pwd > "$LAST_PATH_FILE" 2>/dev/null
+    fi
     return $rtn
 }
 
@@ -1228,9 +1241,16 @@ _cda::list::path()
         abs_path=$(_cda::dir::select "${@-}" "$Optarg_number")
     
     elif ! _cda::list::is_empty; then
+
+        # with the last path
+        if [[ "${1-}" == "-" ]]; then
+            abs_path=$(\cat 2>/dev/null -- "$LAST_PATH_FILE")
+
         # with an alias name
-        local line="$(_cda::list::select "$@")"
-        abs_path="$(_cda::alias::path "$line")"
+        else
+            local line="$(_cda::list::select "$@")"
+            abs_path="$(_cda::alias::path "$line")"
+        fi
 
         # -s --subdir
         if [[ -n $abs_path ]] && _cda::flag::match $FLAG_SUBDIR; then
