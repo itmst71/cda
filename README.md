@@ -118,12 +118,27 @@ $ cda -h
 ```
 
 ## Basic Level
+### Special alias "`-`" (`>= v1.4.0`)
+A special alias "`-`" points the path used last time.  
+The path is saved in `~/.cda/lists/.lastpath` and  shared with other terminal processes.
+```console
+$ cda foo
+$ pwd
+/baz/bar/foo
+$ cd /qux
+$ cd /quux/qux 
+$ cda -
+$ pwd
+/baz/bar/foo
+```
+
+
 ### External Interactive Filter
 * You can use external interactive filter commands to select an alias name.  
 By default, multiple filter command names separated by colons are set to the variable `CDA_CMD_FILTER`.  
 The first available command will be used.
 ```console
-CDA_CMD_FILTER=percol:peco:fzf:fzy
+CDA_CMD_FILTER=peco:percol:fzf:fzy
 ```
 This value can be changed in the configuration file `~/.cda/config`.  
 `--config` opens the file in a text editor.
@@ -190,7 +205,7 @@ lubuntu
 macosx
 manjarolinux
 
-$ cda --list-names l     # The first argument "l" is always used for forward matching
+$ cda --list-names l     # The first argument "l" is always used for forward matching.
 lindows
 linux
 linuxmint
