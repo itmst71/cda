@@ -471,6 +471,20 @@ _cda::setup::paths()
         fi
     fi
 
+    # remove .autolist
+    if [[ -f "$LIST_DIR/.autolist" ]]; then
+        if ! \rm -- "$LIST_DIR/.autolist" 2>/dev/null; then
+            _cda::msg::error WARNING "Could not remove an unnecessary file: " "$LIST_DIR/.autolist"
+        fi
+    fi
+
+    # remove .autopwd
+    if [[ -f "$LIST_DIR/.autopwd" ]]; then
+        if ! \rm -- "$LIST_DIR/.autopwd" 2>/dev/null; then
+            _cda::msg::error WARNING "Could not remove an unnecessary file: " "$LIST_DIR/.autopwd"
+        fi
+    fi
+
     return 0
 }
 
