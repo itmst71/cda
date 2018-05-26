@@ -2246,6 +2246,8 @@ ALIAS NAME
     The default max length is 16.
     e.g.) foo, boo_bar, baz001, a, A, 0, _
 
+    A special alias "-" points the path used last time.
+
 OPTIONS
     --version
         Show version.
