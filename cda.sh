@@ -600,7 +600,7 @@ _cda::setup::use()
         fi
 
         # Write the using list name to the listname file
-        if ! $(printf -- "%s\n" "$list_name" > "$LIST_NAME_FILE"); then
+        if ! $(\printf -- "%s\n" "$list_name" > "$LIST_NAME_FILE"); then
             _cda::msg::error ERROR "Could not write to the file: " "$LIST_DIR_NAME/$list_name"
             return 1
         fi
@@ -1147,13 +1147,13 @@ _cda::list::match()
         [[ -z "$lines" ]] && return 0
 
         if [[ ${#args[@]} -eq 1 ]]; then
-            printf -- "%b\n" "$lines"
+            \printf -- "%b\n" "$lines"
             return 0
 
         # in an exact order
         elif _cda::utils::is_true "$CDA_MATCH_EXACT_ORDER"; then
             regexp="^($(_cda::text::join '[^ ]*' ${args[@]})[^ ]* +)"
-            lines="$(printf -- "%b" "$lines" | \grep -E "$regexp")"
+            lines="$(\printf -- "%b" "$lines" | \grep -E "$regexp")"
 
         # in no particular order
         else
@@ -1163,11 +1163,11 @@ _cda::list::match()
             for name in "${args[@]}"
             do
                 regexp="^${firstArg}[^ ]*${name}[^ ]* +"
-                lines="$(printf -- "%b" "$lines" | \grep -E "$regexp")"
+                lines="$(\printf -- "%b" "$lines" | \grep -E "$regexp")"
                 [[ -z "$lines" ]] && break
             done
         fi
-        [[ -n "$lines" ]] && printf -- "%b\n" "$lines"
+        [[ -n "$lines" ]] && \printf -- "%b\n" "$lines"
     fi
 }
 
@@ -1827,7 +1827,7 @@ _cda::dir::select()
     local new_abs_path= line=
     
     if _cda::num::is_number "${2-}"; then
-        local dirnum="$(printf -- "%d" $((10#${2})))"
+        local dirnum="$(\printf -- "%d" $((10#${2})))"
         if [[ $dirnum -eq 0 ]]; then
             new_abs_path=$abs_path
         else
@@ -1840,7 +1840,7 @@ _cda::dir::select()
         fi
 
         if _cda::flag::match $FLAG_VERBOSE; then
-            printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter 2 >&2
+            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter 2 >&2
         fi
     else
         # count the number of lines to determine padding width
@@ -1869,7 +1869,7 @@ _cda::dir::select()
 
         if _cda::flag::match $FLAG_VERBOSE; then
             local num="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
-            printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$num" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter 2 >&2
+            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$num" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter 2 >&2
         fi
     fi
 
@@ -2111,7 +2111,7 @@ _cda::msg::internal_error()
     _cda::msg::error "INTERNAL ERROR" "${funcs[1]}(): $text" "$value"
     funcs[0]= 
     local IFS=$'\n'
-    printf -- "Stack Trace%b\n" "${funcs[*]}"
+    \printf -- "Stack Trace%b\n" "${funcs[*]}"
 }
 
 
@@ -2156,7 +2156,7 @@ _cda::cmd::get()
         *) return 1;;
     esac
     [[ -z $cmd ]] && return 1
-    printf -- "%b" "$cmd"
+    \printf -- "%b" "$cmd"
 }
 
 _cda::cmd::exec()
@@ -2586,7 +2586,7 @@ _cda::completion::exec()
     else
         # -u use-temp
         if [[ $COMP_LINE =~ \ (-[a-zA-Z0-9]*u|--use-temp)\ +[a-zA-Z0-9_]+\ + ]]; then
-            local using="$(\sed -e 's/^.* \{1,\}\(-[a-zA-Z0-9]*u\|--use-temp\) \{1,\}\([a-zA-Z0-9_]+\) \{1,\}.*$/\2/' <<< "$COMP_LINE")"
+            local using="$(\sed -e 's/^.* \{1,\}\(-[a-zA-Z0-9]*u\|--use-temp\) \{1,\}\([a-zA-Z0-9_]\{1,\}\) \{1,\}.*$/\2/' <<< "$COMP_LINE")"
             COMPREPLY=($(\compgen -W "$(_cda -u $using --list-names  2>/dev/null)" -- "$curr"))
             return $?
 
