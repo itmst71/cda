@@ -2,7 +2,10 @@
 `cd` with an alias name.
 
 # Demo
-![cda demo](https://github.com/itmst71/cda/wiki/images/demo.gif)
+[v1.4.0 DEMO in YouTube](https://www.youtube.com/watch?v=T4o_Q7HlBYw)  
+<a href="https://www.youtube.com/watch?v=T4o_Q7HlBYw">
+<img src="https://github.com/itmst71/cda/wiki/images/demo_youtube_thumbnail.png" width="500" title="v1.4.0 DEMO in YouTube">
+</a>
 
 # Contents
 * [Demo](#demo)
@@ -23,7 +26,6 @@
 * Manages alias names in a text file
 * Supports interactive filters like `percol`, `peco`, `fzf`, `fzy` etc...
 * Supports `bash-completion`
-* Supports terminal multiplexers (`tmux` and `GNU screen`)
 
 # Requirements
 * Bash 3.2+ / Zsh 5.0+
@@ -48,8 +50,7 @@ $ git clone https://github.com/itmst71/cda.git
 ## Homebrew
 
 ```console
-$ brew tap itmst71/tools
-$ brew install cda
+$ brew install itmst71/tools/cda
 ```
 
 * `source cda.sh` in `~/.bashrc` or `~/.zshrc`
@@ -120,12 +121,27 @@ $ cda -h
 ```
 
 ## Basic Level
+### Special alias "`-`" (`>= v1.4.0`)
+A special alias "`-`" points the path used last time.  
+The path is saved in `~/.cda/lists/.lastpath` and  shared with other terminal processes.
+```console
+$ cda foo
+$ pwd
+/baz/bar/foo
+$ cd /qux
+$ cd /quux/qux 
+$ cda -
+$ pwd
+/baz/bar/foo
+```
+
+
 ### External Interactive Filter
 * You can use external interactive filter commands to select an alias name.  
 By default, multiple filter command names separated by colons are set to the variable `CDA_CMD_FILTER`.  
 The first available command will be used.
 ```console
-CDA_CMD_FILTER=percol:peco:fzf:fzy
+CDA_CMD_FILTER=peco:percol:fzf:fzy
 ```
 This value can be changed in the configuration file `~/.cda/config`.  
 `--config` opens the file in a text editor.
@@ -182,33 +198,45 @@ $ cda -F fzf
 
 ### Internal Filter
 * `cda` itself also has the simple non-interactive filter.  
-***The first argument is always used for forward match searches.***
+***The first argument is always used for forward matching search.***
 ```console
-$ cda -l
-abcefg1       /qux/baz/bar/foo1
-abcgfe1       /qux/baz/bar/foo2
-abcabcefg1    /qux/baz/bar/foo3
-axcxyz1       /qux/baz/bar/foo4
-axcxyz11      /qux/baz/bar/foo5
-axcxyz121     /qux/baz/bar/foo6
-bbcefg1       /qux/baz/bar/foo7
-$ cda -l b
-bbcefg1       /qux/baz/bar/foo7
+$ cda --list-names       # Print only names
+lindows
+linux
+linuxmint
+lubuntu
+macosx
+manjarolinux
+
+$ cda --list-names l     # The first argument "l" is always used for forward matching.
+lindows
+linux
+linuxmint
+lubuntu
 ```
 
-* The second and subsequent arguments are used for unordered partial AND match search after forward match search with the first argument.
+* The second and subsequent arguments are used in an exact order for partial matching.  
+
 ```console
-$ cda -l a f
-abcefg1       /qux/baz/bar/foo1
-abcgfe1       /qux/baz/bar/foo2
-abcabcefg1    /qux/baz/bar/foo3
-$ cda -l a f a
-abcabcefg1    /qux/baz/bar/foo3
-$ cda -l ax 11
-axcxyz11      /qux/baz/bar/foo5
-$ cda a 2
-$ pwd
-/qux/baz/bar/foo6
+$ cda --list-names l u t
+linuxmint
+lubuntu
+
+$ cda --list-names l t u
+lubuntu
+```
+
+* if you set `CDA_MATCH_EXACT_ORDER=false`, the second and subsequent arguments are used in no particular order.  
+This behavior is the same as `v1.3.0` or lower.
+
+```console
+$ cda --list-names l u t
+linuxmint
+lubuntu
+
+$ cda --list-names l t u
+linuxmint
+lubuntu
 ```
 
 ## Intermediate Level
@@ -348,59 +376,6 @@ $ pwd
 /home/user/troublesome_names_for_input/日本語
 ```
 
-### Auto-Alias for Terminal Multiplexer
-* When `cd` in `tmux` or `GNU screen` session, alias is automatically added / removed using session name, window number and pane number.  
-So you can easily `cd` by using aliases added in another session or another window.
-
-* This feature can be enabled by setting `CDA_AUTO_ALIAS` to `true`.
-
-* `-m` `--multiplexer` temporarily switches to auto alias list for terminal multiplexer.
-```console
-$ tmux ls
-dev1: 1 windows (created Tue Feb 07 01:24:11 2017) [80x19] (attatched)
-ssh: 1 windows (created Tue Feb 07 01:24:33 2017) [80x19] (attatched)
-$ screen -ls
-There is a screen on:
-        306.dev2        (Attached)
-        6434.pts-13.myhost     (Attached)
-1 Socket in /tmp/uscreens/S-itmst71.
-$ cda -m -l
-13_0            /baz/bar
-dev1_0_0        /baz
-dev1_0_1        /baz/bar/foo
-dev2_0          /quux/qux/baz2/bar/foo
-dev2_1          /qux/baz/bar/foo
-ssh_0_0         /quux/qux/baz/bar/foo
-$ cda -m dev2_0
-$ pwd
-/quux/qux/baz2/bar/foo
-```
-
-* Of course you can use tab completion and filters.
-```console
-$ cda -m d<TAB>
-$ cda -m dev
-QUERY>                                       (1/4) [1/1]
-:dev1_0_0        /baz
-:dev1_0_1        /baz/bar/foo
-:dev2_0          /quux/qux/baz2/bar/foo
-:dev2_1          /qux/baz/bar/foo
-```
-
-* If you specify `-` as the alias name, you can `cd` to the directory you executed `cd` last in all sessions.
-```console
-$ cda -m -
-```
-
-* The auto-alias list and auto-pwd file are automatically created in `~/.cda/lists` as `.autolist` and `.autopwd` respectively.
-```console
-$ ls -a ~/.cda/lists
-.  ..  .autolist  .autopwd  default
-```
-
-* The auto-alias is realized by hooking `cd`.  
-You can change the hook type with the `CDA_AUTO_ALIAS_HOOK_TYPE` variable.
-
 # Config Variables
 ## Specification
 * By default, configuration variables can be defined with the following file:
@@ -441,11 +416,17 @@ Default is `true`.
 
         CDA_BASH_COMPLETION=true
 
+* CDA_MATCH_EXACT_ORDER  
+Set to `false` if you want to use the second and subsequent arguments in no particular order for partial match search.  
+The default is `true`.
+
+        CDA_MATCH_EXACT_ORDER=true
+
 * CDA_CMD_FILTER  
 Specify the name or path of interactive filter commands to select an alias from list when no argument is given or multiple aliases are hit.  
 `-F` `--cmd-filter` can override this.
 
-        CDA_CMD_FILTER=percol:peco:fzf:fzy
+        CDA_CMD_FILTER=peco:percol:fzf:fzy
 
 * CDA_CMD_OPEN  
 Specify the name or path of file manager commands to open the path when using `-o` `--open`.  
@@ -457,7 +438,7 @@ Specify the name or path of file manager commands to open the path when using `-
 Specify a name or path of editor commands to edit the list file with `-e` `--edit` or the config file with `--config`.  
 `-E --cmd-editor` can override this.
 
-        CDA_CMD_EDITOR=vim:nano:emacs:vi
+        CDA_CMD_EDITOR=vim:vi:nano:emacs
 
 * CDA_FILTER_LINE_PREFIX  
 Set to true to add a colon prefix to each line of the list passed to the filter. It will help you to match the beginning of the line.
@@ -469,21 +450,6 @@ Set to `true` if you do not want to affect or be affected by external cd extensi
 `-B` `--builtin-cd` can override this and temporarily set to `true`. Default is `false`.
 
         CDA_BUILTIN_CD=false
-
-* CDA_AUTO_ALIAS  
-Set to `true` if you want to use the [auto-alias feature](#auto-alias-for-terminal-multiplexer).  
-Default is `false`.
-
-        CDA_AUTO_ALIAS=false
-
-* CDA_AUTO_ALIAS_HOOK_TYPE  
-Specify one of [`function`, `prompt`, `chpwd`] as the hook type for the auto-alias feature which is realized by hooking `cd`.  
-`function` overrides `cd` command with the `Bash` function.  
-`prompt` adds the hook function to `PROMPT_COMMAND` variable.  
-`chpwd` adds the hook function with `add-zsh-hook`. Only `Zsh` can use `chpwd`.
-
-        CDA_AUTO_ALIAS_HOOK_TYPE=function     # Bash
-        CDA_AUTO_ALIAS_HOOK_TYPE=chpwd        # Zsh
 
 * CDA_COLOR_MODE  
 Specify one of [`never`, `always`, `auto`] as the color mode of the output message.  

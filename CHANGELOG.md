@@ -1,4 +1,11 @@
 # Change Log
+## v1.4.0 (2018-05-28)
+* Use args in an exact order for partial match search
+* Removed the Auto-Alias feature
+* Implemented the lastpath feature
+* Changed default values of config
+* Fixed some small bugs
+
 ## v1.3.0 (2018-03-19)
 * Improved the check and clean process
 * Better handling of broken data
