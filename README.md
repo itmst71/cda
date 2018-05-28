@@ -2,7 +2,10 @@
 `cd` with an alias name.
 
 # Demo
-![cda demo](https://github.com/itmst71/cda/wiki/images/demo.gif)
+[v1.4.0 DEMO in YouTube](https://www.youtube.com/watch?v=T4o_Q7HlBYw)  
+<a href="https://www.youtube.com/watch?v=T4o_Q7HlBYw">
+<img src="https://github.com/itmst71/cda/wiki/images/demo_youtube_thumbnail.png" width="500" title="v1.4.0 DEMO in YouTube">
+</a>
 
 # Contents
 * [Demo](#demo)
@@ -413,8 +416,8 @@ Default is `true`.
 
         CDA_BASH_COMPLETION=true
 
-* CDA_MATCH_EXACT_ORDER
-Set to false if you want to use the second and subsequent arguments in no particular order for partial match search.  
+* CDA_MATCH_EXACT_ORDER  
+Set to `false` if you want to use the second and subsequent arguments in no particular order for partial match search.  
 The default is `true`.
 
         CDA_MATCH_EXACT_ORDER=true
