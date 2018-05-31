@@ -786,12 +786,52 @@ _cda::option::set()
 _cda::option::parse()
 {
     local rtn=0
-    local Err_incompat err_noarg_s err_noarg_l err_undef_s err_undef_l
+    local Err_incompat err_noarg_s err_noarg_l err_undef_s err_undef_l err_amb
     Err_incompat=()
     err_noarg_s=()
     err_noarg_l=()
     err_undef_s=()
     err_undef_l=()
+    err_amb=()
+
+    local comp longopts= completion=false
+    if _cda::utils::is_true "$CDA_BASH_COMPLETION"; then
+        completion=true
+        comp=()
+        longopts="
+        --add
+        --add-forced
+        --builtin-cd
+        --check
+        --clean	
+        --edit
+        --cmd-editor
+        --cmd-filter
+        --filter
+        --help
+        --help-full
+        --list
+        --list-files
+        --number
+        --open
+        --cmd-open
+        --path
+        --remove
+        --remove-list
+        --subdir
+        --use
+        --use-temp
+        --verbose
+        --version
+        --list-names
+        --list-paths
+        --color
+        --config
+        --show-config
+        --reload-config
+        --reset-config
+        "
+    fi
 
     local optname optarg is_split_optarg
     local op detected_opts rest_opts shift_cnt
@@ -810,6 +850,13 @@ _cda::option::parse()
                 optarg="$2"
             else
                 unset optarg
+            fi
+        fi
+
+        if [[ "$completion" == true ]]; then
+            comp=($(\compgen -W "$longopts" -- "$optname"))
+            if [[ ${#comp[@]} -eq 1 ]]; then
+                optname=${comp[0]}
             fi
         fi
 
@@ -888,7 +935,11 @@ _cda::option::parse()
                 \break
                 ;;
             --*)
-                err_undef_l+=("$optname")
+                if [[ "$completion" == true && ${#comp[@]} -ge 2 ]]; then
+                    err_amb+=("$optname")
+                else
+                    err_undef_l+=("$optname")
+                fi
                 \shift
                 ;;
             -)
@@ -954,6 +1005,18 @@ _cda::option::parse()
                 ;;
         esac
     done
+
+    # check ambiguous options
+    if [[ "$completion" == true && ${#err_amb[@]} -ne 0 ]]; then
+        local amb ambs
+        ambs=()
+        for amb in $(<<< "${err_amb[@]}" \tr " " "\n" | \sort | \uniq)
+        do
+            ambs=($(\compgen -W "$longopts" -- "$amb"))
+            _cda::msg::error WARNING "Ambiguous Option Name: " "$amb" "\n$(_cda::text::color -f yellow -- "")" "${ambs[*]}"
+        done
+        rtn=1
+    fi
 
     local msg
 
@@ -2574,7 +2637,7 @@ _cda::completion::exec()
         case "$prev" in
             # options requiring no more argument
             -e | --edit | -h | --help | -H | --help-full | -L | --list-files | \
-            --version | --config)
+            --version | --config | --reload-config | --reset-config)
                 return 0
                 ;;
             
