@@ -2415,6 +2415,12 @@ OPTIONS
     --show-config
         Show the config file.
 
+    --reload-config
+        Reload the config file.
+    
+    --reset-config
+        Reset the config file to Defaults.
+
     --color {[auto | always | never]}
         Control error messages to be colored for pipes.
 
