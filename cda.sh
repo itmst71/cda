@@ -1233,7 +1233,7 @@ _cda::list::select()
     fi
 
     if _cda::flag::match $FLAG_VERBOSE; then
-        _cda::list::highlight <<< "$line" | _cda::msg::filter 2 >&2
+        _cda::list::highlight <<< "$line" | _cda::msg::filter $FD_STDERR >&2
     fi
 
     \printf -- "%s" "$line"
@@ -1334,7 +1334,7 @@ _cda::list::add()
     fi
 
     if _cda::flag::match $FLAG_VERBOSE; then
-        _cda::list::highlight <<< "$new_line" | _cda::msg::filter 2 >&2
+        _cda::list::highlight <<< "$new_line" | _cda::msg::filter $FD_STDERR >&2
     fi
 
     # output to the list file
@@ -1408,7 +1408,7 @@ _cda::list::remove()
 
     if _cda::flag::match $FLAG_VERBOSE; then
         local match_lines="$(_cda::list::match -e "${remove_names[@]}")"
-        <<< "$match_lines" \sed 's/^/'$'\033''\[0;0;31mRemoved: '$'\033''\[0m/g' |  _cda::msg::filter 2 >&2
+        <<< "$match_lines" \sed 's/^/'$'\033''\[0;0;31mRemoved: '$'\033''\[0m/g' |  _cda::msg::filter $FD_STDERR >&2
     fi
 
     local regexp="^($(_cda::text::join ' +|' ${remove_names[@]}) +)"
@@ -1840,7 +1840,7 @@ _cda::dir::select()
         fi
 
         if _cda::flag::match $FLAG_VERBOSE; then
-            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter 2 >&2
+            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
         fi
     else
         # count the number of lines to determine padding width
@@ -1869,7 +1869,7 @@ _cda::dir::select()
 
         if _cda::flag::match $FLAG_VERBOSE; then
             local num="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
-            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$num" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter 2 >&2
+            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$num" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
         fi
     fi
 
@@ -2096,7 +2096,7 @@ _cda::msg::error()
         _cda::text::color -f default -- " $text"
         _cda::text::color $col -- "$value"
         \printf -- "%b\n" "$extra"
-    } | _cda::msg::filter 2 >&2
+    } | _cda::msg::filter $FD_STDERR >&2
 }
 
 _cda::msg::internal_error()
