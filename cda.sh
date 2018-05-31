@@ -1,5 +1,6 @@
 # source(.) this file in ~/.bashrc or ~/.zshrc
 # cda requires Bash 3.2+ or Zsh 5.0+
+
 if [[ -n ${BASH_VERSION-} ]]; then 
     CDA_SRC_ROOT="$(builtin cd -- "$(\dirname -- "$BASH_SOURCE")" && \pwd)"
     CDA_SRC_FILE="$CDA_SRC_ROOT/${BASH_SOURCE##*/}"
@@ -74,15 +75,17 @@ _cda()
     declare -r FLAG_EDIT_LIST=$((1<<14))
     declare -r FLAG_EDIT_CONFIG=$((1<<15))
     declare -r FLAG_SHOW_CONFIG=$((1<<16))
-    declare -r FLAG_LIST_NAMES=$((1<<17))
-    declare -r FLAG_LIST_PATHS=$((1<<18))
-    declare -r FLAG_CHECK=$((1<<19))
-    declare -r FLAG_CLEAN=$((1<<20))
-    declare -r FLAG_OVERWRITE=$((1<<21))
-    declare -r FLAG_FILTER_FORCED=$((1<<22))
-    declare -r FLAG_SUBDIR=$((1<<23))
-    declare -r FLAG_BUILTIN_CD=$((1<<24))
-    declare -r FLAG_VERBOSE=$((1<<25))
+    declare -r FLAG_RELOAD_CONFIG=$((1<<17))
+    declare -r FLAG_RESET_CONFIG=$((1<<18))
+    declare -r FLAG_LIST_NAMES=$((1<<19))
+    declare -r FLAG_LIST_PATHS=$((1<<20))
+    declare -r FLAG_CHECK=$((1<<21))
+    declare -r FLAG_CLEAN=$((1<<22))
+    declare -r FLAG_OVERWRITE=$((1<<23))
+    declare -r FLAG_FILTER_FORCED=$((1<<24))
+    declare -r FLAG_SUBDIR=$((1<<25))
+    declare -r FLAG_BUILTIN_CD=$((1<<26))
+    declare -r FLAG_VERBOSE=$((1<<27))
     
     declare -r FLAGS_INCOMPAT=$((
           FLAG_HELP_SHORT | FLAG_HELP_FULL | FLAG_VERSION
@@ -90,7 +93,8 @@ _cda()
         | FLAG_EDIT_LIST | FLAG_EDIT_CONFIG | FLAG_PATH
         | FLAG_LIST_NAMES | FLAG_LIST_PATHS | FLAG_LIST
         | FLAG_LIST_FILES | FLAG_OPEN | FLAG_USE | FLAG_REMOVE_LIST
-        | FLAG_CHECK | FLAG_CLEAN | FLAG_SHOW_CONFIG))
+        | FLAG_CHECK | FLAG_CLEAN | FLAG_SHOW_CONFIG
+        | FLAG_RELOAD_CONFIG | FLAG_RESET_CONFIG))
 
     # default config variables
     declare -r CDA_EXEC_NAME_DEFAULT=cda
@@ -171,7 +175,7 @@ _cda()
 
     # check options requiring NO args
     tmp_flags=$((Flags & (FLAG_VERSION | FLAG_HELP_SHORT | FLAG_HELP_FULL
-            | FLAG_LIST_FILES | FLAG_EDIT_LIST | FLAG_SHOW_CONFIG | FLAG_EDIT_CONFIG)))
+            | FLAG_LIST_FILES | FLAG_EDIT_LIST | FLAG_SHOW_CONFIG | FLAG_RELOAD_CONFIG | FLAG_RESET_CONFIG | FLAG_EDIT_CONFIG)))
     if [[ $tmp_flags -ne $FLAG_NONE && $ARG_C -ne 0 ]]; then
         _cda::msg::error WARNING "Unnecessary Arguments Given: " "${Argv[*]}"
     fi
@@ -321,7 +325,19 @@ _cda()
 
     # --show-config
     if _cda::flag::match $FLAG_SHOW_CONFIG; then
-        _cda::config::show
+        _cda::config::manage --show
+        return $?
+    fi
+
+    # --reload-config
+    if _cda::flag::match $FLAG_RELOAD_CONFIG; then
+        _cda::config::manage --reload
+        return $?
+    fi
+
+    # --reset-config
+    if _cda::flag::match $FLAG_RESET_CONFIG; then
+        _cda::config::manage --remake
         return $?
     fi
 
@@ -341,6 +357,10 @@ _cda::setup::init()
     # load user config
     if [[ -f "$CONFIG_FILE" ]]; then
         . "$CONFIG_FILE"
+        if [[ $? -ne 0 ]]; then
+            _cda::msg::error ERROR "Failed to load config: " "$CONFIG_FILE"
+            return 1
+        fi
     fi
 
     # define the function with the name defined by the user to call the main function _cda
@@ -454,7 +474,7 @@ _cda::setup::paths()
             _cda::msg::error FATAL "Could not create a file: " "$CONFIG_FILE"
             return 1
         fi
-        _cda::config::create
+        _cda::config::manage --create
     fi
 
     # is the config file readable?
@@ -615,8 +635,10 @@ _cda::setup::use()
 #------------------------------------------------
 # _cda::config
 #------------------------------------------------
-_cda::config::create()
+_cda::config::manage()
 {
+    case "$1" in
+        --create)
 << __EOCFG__ \cat > "$CONFIG_FILE"
 # CDA_EXEC_NAME=$CDA_EXEC_NAME_DEFAULT
 # CDA_BASH_COMPLETION=$CDA_BASH_COMPLETION_DEFAULT
@@ -630,10 +652,8 @@ _cda::config::create()
 # CDA_LIST_HIGHLIGHT_COLOR="$CDA_LIST_HIGHLIGHT_COLOR_DEFAULT"
 # CDA_ALIAS_MAX_LEN=$CDA_ALIAS_MAX_LEN_DEFAULT
 __EOCFG__
-}
-
-_cda::config::show()
-{
+        ;;
+        --show)
 << __EOCFG__ \cat
 CDA_SRC_ROOT="$CDA_SRC_ROOT"
 CDA_SRC_FILE="$CDA_SRC_FILE"
@@ -650,8 +670,41 @@ CDA_COLOR_MODE=${CDA_COLOR_MODE:-$CDA_COLOR_MODE_DEFAULT}
 CDA_LIST_HIGHLIGHT_COLOR="${CDA_LIST_HIGHLIGHT_COLOR:-$CDA_LIST_HIGHLIGHT_COLOR_DEFAULT}"
 CDA_ALIAS_MAX_LEN=$CDA_ALIAS_MAX_LEN
 __EOCFG__
-}
+        ;;
+        --reload)
+            if _cda::utils::is_true "$CDA_BASH_COMPLETION"; then
+                \complete -r $CDA_EXEC_NAME
+            fi
+            local _cda_exec_name=$CDA_EXEC_NAME
+            unset $CDA_EXEC_NAME
+            unset CDA_EXEC_NAME
+            unset CDA_BASH_COMPLETION
+            unset CDA_MATCH_EXACT_ORDER
+            unset CDA_CMD_FILTER
+            unset CDA_CMD_OPEN
+            unset CDA_CMD_EDITOR
+            unset CDA_FILTER_LINE_PREFIX
+            unset CDA_BUILTIN_CD
+            unset CDA_COLOR_MODE
+            unset CDA_LIST_HIGHLIGHT_COLOR
+            unset CDA_ALIAS_MAX_LEN
+            CDA_INITIALIZED=false
+            if ! _cda::setup::init; then
+                return 1
+            fi
+            if [[ "$_cda_exec_name" != "$CDA_EXEC_NAME" ]]; then
+                _cda::msg::error NOTICE "Exec Name Changed: " "$_cda_exec_name -> $CDA_EXEC_NAME"
+            fi
+            ;;
+        --remake)
+            _cda::config::manage --create
+            _cda::config::manage --reload
+            ;;
 
+        *) _cda::msg::internal_error "Illegal Option: " "$1";
+        return 1;;
+    esac
+}
 
 #------------------------------------------------
 # _cda::flag
@@ -704,6 +757,8 @@ _cda::option::to_flag()
         --list-paths)           \printf -- $FLAG_LIST_PATHS;;
         --config)               \printf -- $FLAG_EDIT_CONFIG;;
         --show-config)          \printf -- $FLAG_SHOW_CONFIG;;
+        --reload-config)        \printf -- $FLAG_RELOAD_CONFIG;;
+        --reset-config)         \printf -- $FLAG_RESET_CONFIG;;
 
         -E | --cmd-editor)      \printf -- $FLAG_NONE;;
         -F | --cmd-filter)      \printf -- $FLAG_NONE;;
@@ -819,7 +874,10 @@ _cda::option::parse()
             --version | \
             --list-names | \
             --list-paths | \
-            --config | --show-config \
+            --config | \
+            --show-config | \
+            --reload-config | \
+            --reset-config \
             )
                 _cda::option::set $optname || return 1
                 \shift
@@ -1233,7 +1291,7 @@ _cda::list::select()
     fi
 
     if _cda::flag::match $FLAG_VERBOSE; then
-        _cda::list::highlight <<< "$line" | _cda::msg::filter 2 >&2
+        _cda::list::highlight <<< "$line" | _cda::msg::filter $FD_STDERR >&2
     fi
 
     \printf -- "%s" "$line"
@@ -1334,7 +1392,7 @@ _cda::list::add()
     fi
 
     if _cda::flag::match $FLAG_VERBOSE; then
-        _cda::list::highlight <<< "$new_line" | _cda::msg::filter 2 >&2
+        _cda::list::highlight <<< "$new_line" | _cda::msg::filter $FD_STDERR >&2
     fi
 
     # output to the list file
@@ -1408,7 +1466,7 @@ _cda::list::remove()
 
     if _cda::flag::match $FLAG_VERBOSE; then
         local match_lines="$(_cda::list::match -e "${remove_names[@]}")"
-        <<< "$match_lines" \sed 's/^/'$'\033''\[0;0;31mRemoved: '$'\033''\[0m/g' |  _cda::msg::filter 2 >&2
+        <<< "$match_lines" \sed 's/^/'$'\033''\[0;0;31mRemoved: '$'\033''\[0m/g' |  _cda::msg::filter $FD_STDERR >&2
     fi
 
     local regexp="^($(_cda::text::join ' +|' ${remove_names[@]}) +)"
@@ -1840,7 +1898,7 @@ _cda::dir::select()
         fi
 
         if _cda::flag::match $FLAG_VERBOSE; then
-            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter 2 >&2
+            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
         fi
     else
         # count the number of lines to determine padding width
@@ -1869,7 +1927,7 @@ _cda::dir::select()
 
         if _cda::flag::match $FLAG_VERBOSE; then
             local num="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
-            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$num" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter 2 >&2
+            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$num" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
         fi
     fi
 
@@ -2096,7 +2154,7 @@ _cda::msg::error()
         _cda::text::color -f default -- " $text"
         _cda::text::color $col -- "$value"
         \printf -- "%b\n" "$extra"
-    } | _cda::msg::filter 2 >&2
+    } | _cda::msg::filter $FD_STDERR >&2
 }
 
 _cda::msg::internal_error()
@@ -2357,6 +2415,12 @@ OPTIONS
     --show-config
         Show the config file.
 
+    --reload-config
+        Reload the config file.
+    
+    --reset-config
+        Reset the config file to Defaults.
+
     --color {[auto | always | never]}
         Control error messages to be colored for pipes.
 
@@ -2561,7 +2625,9 @@ _cda::completion::exec()
                 --list-paths
                 --color
                 --config
-                --show-config 
+                --show-config
+                --reload-config
+                --reset-config
                 " -- "$curr"))
             return $?
 
