@@ -26,17 +26,21 @@ _cda()
     # set the root directory path
     CDA_DATA_ROOT="${CDA_DATA_ROOT:-$HOME/.cda}"
 
+    # save locale variables before overriding
+    local _LC_ALL=$LC_ALL
+    local _LANG=$LANG
+
+    # override system variables
+    local IFS=$' \t\n'
+    local LC_ALL=C
+    local LANG=C
+
     #------------------------------------------------
     # Constant variables
     #------------------------------------------------
     # app info
     declare -r APPNAME="cda"
     declare -r VERSION="1.4.0 (2018-05-28)"
-
-    # override system variables
-    local IFS=$' \t\n'
-    local LC_ALL=C
-    local LANG=C
 
     # save whether the stdin/out/err of the main function is TTY or not.
     [[ -t 0 ]]
@@ -2297,6 +2301,10 @@ _cda::cmd::exec()
             *)  args+=("$1"); \shift;;
         esac
     done
+
+    # restore locale variables before executing
+    local LC_ALL=$_LC_ALL
+    local LANG=$_LANG
 
     if [[ $pipe == true ]]; then
         \eval "$cmd" < /dev/stdin
