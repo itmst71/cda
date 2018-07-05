@@ -2473,9 +2473,11 @@ OPTIONS
     -s | --subdir
         Select a subdirectory in the alias path with a filter.
     
-    -n | --number {SUBDIR_NUMBER}
-        Select a subdirectory by number in the subdirectory mode
-        non-interactively.
+    -n | --number {SUBDIR_NUMBERS}
+        Select a subdirectory by number in the subdirectory mode.
+        Multiple numbers separated by commas like "1,3,6,0" are
+        used in turn as each subdirectory number.
+        Specify 0 to exit subdirectory mode at the current directory.
 
     -F | --cmd-filter {FILTER_COMMAND}
         Use a specified interactive filter.
