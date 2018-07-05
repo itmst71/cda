@@ -1441,21 +1441,14 @@ _cda::list::add()
     if [[ -z $match_line ]]; then
         output_contents="$new_line\n$(_cda::list::print 2>/dev/null)"
 
-    # already exist
+    # -A --add-forced
     else
-        # check duplicated
-        local match_name="$(_cda::alias::name "$match_line")"
-        local match_path="$(_cda::alias::path "$match_line")"
-        if [[ "$alias_name" == "$match_name" && "$abs_path" == "$match_path" ]]; then
-            if ! _cda::flag::match $FLAG_ADD_FORCED; then
-                _cda::msg::error WARNING "Duplicated: " "$match_name" "\n$(_cda::list::highlight <<< "$match_line")"
-            fi
-            return 1
-        fi
-
-        # -A --add-forced
         if ! _cda::flag::match $FLAG_ADD_FORCED; then
-            _cda::msg::error WARNING "Already Exists: " "$match_name" "\n$(_cda::list::highlight <<< "$match_line")"
+            local match_name="$(_cda::alias::name "$match_line")"
+            _cda::msg::error ERROR "Name Duplicated: " "$match_name"
+            if _cda::flag::match $FLAG_VERBOSE; then
+                _cda::list::highlight <<< "$match_line" | _cda::msg::filter $FD_STDERR >&2
+            fi
             return 1
         fi
         output_contents="$new_line\n$(_cda::list::print | \grep -v -E "^$alias_name +/.*")"
