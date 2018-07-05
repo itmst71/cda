@@ -165,7 +165,7 @@ _cda()
     local tmp_flags
 
     # set FLAG_CD
-    tmp_flags=$((Flags & ~(FLAG_USE_TEMP | FLAG_FILTER_FORCED | FLAG_MULTIPLEXER | FLAG_SUBDIR | FLAG_BUILTIN_CD | FLAG_VERBOSE)))
+    tmp_flags=$((Flags & ~(FLAG_USE_TEMP | FLAG_FILTER_FORCED | FLAG_SUBDIR | FLAG_BUILTIN_CD | FLAG_VERBOSE)))
     if [[ $tmp_flags -eq $FLAG_NONE ]]; then
         _cda::flag::set $FLAG_CD || return 1
     fi
@@ -1413,8 +1413,7 @@ _cda::list::add()
 
     # alias name
     local alias_name="${1-}"
-    local strict="$(_cda::flag::match $FLAG_MULTIPLEXER || \printf -- "--strict")"
-    if ! _cda::alias::validate --name $strict "$alias_name"; then
+    if ! _cda::alias::validate --name --strict "$alias_name"; then
         _cda::msg::error ERROR "Invalid Alias Name: " "$alias_name"
         return 1
     fi
@@ -1426,7 +1425,11 @@ _cda::list::add()
         rel_path=$(\pwd)
     fi
     local abs_path="$(_cda::path::to_abs "$rel_path")"
-    if ! _cda::dir::check --show-error "$abs_path"; then
+
+    if _cda::flag::match $FLAG_SUBDIR; then
+        abs_path=$(_cda::dir::select "$abs_path" "$Optarg_number")
+    fi
+    if [[ -z "$abs_path" ]]; then
         return 1
     fi
 
@@ -1859,9 +1862,10 @@ _cda::dir::check()
                     err_path=$(_cda::text::color -f magenta -U -- "$err_path")
                     _cda::msg::error ERROR "Permission Denied: " "" "$ok_path$err_path";;
                     
-            3|4|5)  ok_path=$(_cda::text::color -f red -- "$ok_path")
+            3|4)  ok_path=$(_cda::text::color -f red -- "$ok_path")
                     err_path=$(_cda::text::color -f red -U -- "$err_path")
                     _cda::msg::error ERROR "Not Directory: " "" "$ok_path$err_path";;
+            5)      _cda::msg::error ERROR "Not Directory: " "\"\"";;
         esac
     fi
 
