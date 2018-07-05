@@ -1398,7 +1398,7 @@ _cda::list::path()
     else
         _cda::msg::error WARNING "No Alias Added: " "$USING_LIST_FILE"
     fi
-    
+
     [[ -z $abs_path ]] && return 1
     \printf -- "%s" "$abs_path"
 }
@@ -1940,6 +1940,7 @@ _cda::dir::subdirs()
         [[ $nolink == true && -L "$dir/$item" ]] && continue
         \printf -- "%s\n" "$pdir$item"
     done < <(\ls -1$alldirs -- "$dir")
+    \printf -- "%s\n" ".."
 }
 
 _cda::dir::select()
@@ -1949,59 +1950,79 @@ _cda::dir::select()
     fi
 
     local abs_path="$(_cda::path::to_abs "$1")"
-    local new_abs_path= line=
-    
-    if _cda::num::is_number "${2-}"; then
-        local dirnum="$(\printf -- "%d" $((10#${2})))"
-        if [[ $dirnum -eq 0 ]]; then
-            new_abs_path=$abs_path
+    local tmp_path= line=
+    local IFS=,
+    set -- ${2-}
+
+    while true
+    do
+        if _cda::num::is_number "${1-}"; then
+            local dirnum="$(\printf -- "%d" $((10#${1})))"
+            if [[ $dirnum -eq 0 ]]; then
+                tmp_path=$abs_path
+                \break
+            else
+                line="$(_cda::dir::subdirs -a "$abs_path" | \awk "NR==$dirnum")"
+                if [[ -z $line ]]; then
+                    _cda::msg::error WARNING "No Such Subdir Number: " "$1" ": in: $abs_path"
+                    return 1
+                fi
+                # build a new path
+                tmp_path="${abs_path%/}/$(\printf -- "%s\n" "$line")"
+            fi
+
+            if _cda::flag::match $FLAG_VERBOSE; then
+                \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$tmp_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
+            fi
         else
-            line="$(_cda::dir::subdirs -a "$abs_path" | awk "NR==$dirnum")"
-            if [[ -z $line ]]; then
-                _cda::msg::error WARNING "No Such Subdir Number: " "$2"
+            # count the number of lines to determine padding width
+            local dircnt="$(_cda::dir::subdirs -a -p "$abs_path" | \grep -c "")"
+            local pad_width="$(($(\wc -c <<< "$dircnt") - 1))"
+
+            if [[ -z "$(_cda::cmd::get filter)" ]]; then
+                if _cda::msg::should_color $FD_STDERR; then
+                    _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 |  _cda::list::highlight >&2
+                else
+                    _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0
+                fi
                 return 1
             fi
-            new_abs_path="${abs_path%/}/$(\printf -- "%s\n" "$line")"
-        fi
-
-        if _cda::flag::match $FLAG_VERBOSE; then
-            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
-        fi
-    else
-        # count the number of lines to determine padding width
-        local dircnt="$(_cda::dir::subdirs -a -p "$abs_path" | \grep -c "")"
-        local pad_width="$(($(\wc -c <<< "$dircnt") - 1))"
-
-        if [[ -z "$(_cda::cmd::get filter)" ]]; then
-            if _cda::msg::should_color $FD_STDERR; then
-                _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 |  _cda::list::highlight >&2
+            
+            # add line numbers and send to a filter
+            if _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX"; then
+                line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | \sed 's/^/:/' |  _cda::cmd::exec FILTER -p | \sed 's/^://')"
             else
-                _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0
+                line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | _cda::cmd::exec FILTER -p)"
+            fi
+            [[ -z $line ]] && return 1
+
+            # build a new path
+            tmp_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
+
+            if _cda::flag::match $FLAG_VERBOSE; then
+                local num="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
+                \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$num" "$tmp_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
+            fi
+        fi
+
+        if [[ -z "$tmp_path" || "$tmp_path" =~ /\.$ ]]; then
+            \break
+        fi
+        
+        if ! _cda::dir::check --show-error "$tmp_path"; then
+            if [[ $# -eq 0 ]]; then
+                continue
             fi
             return 1
         fi
-        
-        # add line numbers and send to a filter
-        if _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX"; then
-            line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | \sed 's/^/:/' |  _cda::cmd::exec FILTER -p | \sed 's/^://')"
-        else
-            line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | _cda::cmd::exec FILTER -p)"
+        abs_path=$(_cda::path::to_abs "$tmp_path")
+        if [[ $# -ne 0 ]]; then
+            \shift
         fi
-        [[ -z $line ]] && return 1
+    done
 
-        # build a new path
-        new_abs_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
-
-        if _cda::flag::match $FLAG_VERBOSE; then
-            local num="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
-            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$num" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
-        fi
-    fi
-
-    if ! _cda::dir::check --show-error "$new_abs_path"; then
-        return 1
-    fi
-    \printf -- "%s" "$new_abs_path"
+    abs_path=$(_cda::path::to_abs "$tmp_path")
+    \printf -- "%s" "$abs_path"
 }
 
 
