@@ -1947,14 +1947,14 @@ _cda::dir::select()
     fi
 
     local abs_path="$(_cda::path::to_abs "$1")"
-    local tmp_path= line=
+    local tmp_path= line= dirnum=
     local IFS=,
     set -- ${2-}
 
     while true
     do
         if _cda::num::is_number "${1-}"; then
-            local dirnum="$(\printf -- "%d" $((10#${1})))"
+            dirnum="$(\printf -- "%d" $((10#${1})))"
             if [[ $dirnum -eq 0 ]]; then
                 tmp_path=$abs_path
                 \break
@@ -1997,8 +1997,9 @@ _cda::dir::select()
             tmp_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
 
             if _cda::flag::match $FLAG_VERBOSE; then
-                local num="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
-                \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$num" "$tmp_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
+                dirnum="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
+                dirnum="$(\printf -- "%d" $((10#${dirnum})))"
+                \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$tmp_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
             fi
         fi
 
