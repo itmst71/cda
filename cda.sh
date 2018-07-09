@@ -398,6 +398,7 @@ _cda::setup::init()
     CDA_BASH_COMPLETION="${CDA_BASH_COMPLETION:-$CDA_BASH_COMPLETION_DEFAULT}"
     if _cda::utils::is_true "$CDA_BASH_COMPLETION"; then
         if [[ -n ${ZSH_VERSION-} ]]; then
+            \autoload -U +X compinit && compinit
             \autoload -U +X bashcompinit && bashcompinit
         fi
         \complete -o default -o dirnames -F _cda::completion::exec $CDA_EXEC_NAME
@@ -857,13 +858,11 @@ _cda::option::parse()
             fi
         fi
 
-        if [[ "$completion" == true ]]; then
-            comp=($(\compgen -W "$longopts" -- "$optname"))
-            if [[ ${#comp[@]} -eq 1 ]]; then
-                optname=${comp[0]}
-            fi
+        comp=($(\printf "%s\n" -- $longopts | \grep -E -- "^$optname"))
+        if [[ ${#comp[@]} -eq 1 ]]; then
+            optname=${comp[0]}
         fi
-
+        
         case "$optname" in
             # options requiring arg
             -a | --add | \
@@ -1015,12 +1014,12 @@ _cda::option::parse()
     fi
 
     # check ambiguous options
-    if [[ "$completion" == true && ${#err_amb[@]} -ne 0 ]]; then
+    if [[ ${#err_amb[@]} -ne 0 ]]; then
         local amb ambs
         ambs=()
         for amb in $(<<< "${err_amb[@]}" \tr " " "\n" | \sort | \uniq)
         do
-            ambs=($(\compgen -W "$longopts" -- "$amb"))
+            ambs=($(\printf "%s\n" -- $longopts | \grep -E -- "^$amb"))
             _cda::msg::error WARNING "Ambiguous Option Name: " "$amb" "\n$(_cda::text::color -f yellow -- "")" "${ambs[*]}"
         done
         rtn=1
@@ -2669,7 +2668,7 @@ _cda::completion::exec()
         case "$prev" in
             # options requiring no more argument
             -e | --edit | -h | --help | -H | --help-full | -L | --list-files | \
-            --version | --config | --reload-config | --reset-config)
+            --version | --config | --show-config | --reload-config | --reset-config)
                 return 0
                 ;;
             
