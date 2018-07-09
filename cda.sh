@@ -26,17 +26,21 @@ _cda()
     # set the root directory path
     CDA_DATA_ROOT="${CDA_DATA_ROOT:-$HOME/.cda}"
 
+    # save locale variables before overriding
+    local _LC_ALL=$LC_ALL
+    local _LANG=$LANG
+
+    # override system variables
+    local IFS=$' \t\n'
+    local LC_ALL=C
+    local LANG=C
+
     #------------------------------------------------
     # Constant variables
     #------------------------------------------------
     # app info
     declare -r APPNAME="cda"
     declare -r VERSION="1.4.0 (2018-05-28)"
-
-    # override system variables
-    local IFS=$' \t\n'
-    local LC_ALL=C
-    local LANG=C
 
     # save whether the stdin/out/err of the main function is TTY or not.
     [[ -t 0 ]]
@@ -154,14 +158,14 @@ _cda()
     fi
     declare -r ARG_C=${#Argv[@]}
     
-    
+
     #------------------------------------------------
     # Check the number of args
     #------------------------------------------------
     local tmp_flags
 
     # set FLAG_CD
-    tmp_flags=$((Flags & ~(FLAG_USE_TEMP | FLAG_FILTER_FORCED | FLAG_MULTIPLEXER | FLAG_SUBDIR | FLAG_BUILTIN_CD | FLAG_VERBOSE)))
+    tmp_flags=$((Flags & ~(FLAG_USE_TEMP | FLAG_FILTER_FORCED | FLAG_SUBDIR | FLAG_BUILTIN_CD | FLAG_VERBOSE)))
     if [[ $tmp_flags -eq $FLAG_NONE ]]; then
         _cda::flag::set $FLAG_CD || return 1
     fi
@@ -1006,6 +1010,10 @@ _cda::option::parse()
         esac
     done
 
+    if [[ -n $Optarg_number && ! "${Argv[0]-}" =~ (/|^[.~]) ]] && ! _cda::flag::match $FLAG_SUBDIR; then
+        _cda::msg::error WARNING "-n or --number works in the subdirectory mode"
+    fi
+
     # check ambiguous options
     if [[ "$completion" == true && ${#err_amb[@]} -ne 0 ]]; then
         local amb ambs
@@ -1394,7 +1402,7 @@ _cda::list::path()
     else
         _cda::msg::error WARNING "No Alias Added: " "$USING_LIST_FILE"
     fi
-    
+
     [[ -z $abs_path ]] && return 1
     \printf -- "%s" "$abs_path"
 }
@@ -1409,8 +1417,7 @@ _cda::list::add()
 
     # alias name
     local alias_name="${1-}"
-    local strict="$(_cda::flag::match $FLAG_MULTIPLEXER || \printf -- "--strict")"
-    if ! _cda::alias::validate --name $strict "$alias_name"; then
+    if ! _cda::alias::validate --name --strict "$alias_name"; then
         _cda::msg::error ERROR "Invalid Alias Name: " "$alias_name"
         return 1
     fi
@@ -1422,7 +1429,11 @@ _cda::list::add()
         rel_path=$(\pwd)
     fi
     local abs_path="$(_cda::path::to_abs "$rel_path")"
-    if ! _cda::dir::check --show-error "$abs_path"; then
+
+    if _cda::flag::match $FLAG_SUBDIR; then
+        abs_path=$(_cda::dir::select "$abs_path" "$Optarg_number")
+    fi
+    if [[ -z "$abs_path" ]]; then
         return 1
     fi
 
@@ -1434,21 +1445,14 @@ _cda::list::add()
     if [[ -z $match_line ]]; then
         output_contents="$new_line\n$(_cda::list::print 2>/dev/null)"
 
-    # already exist
+    # -A --add-forced
     else
-        # check duplicated
-        local match_name="$(_cda::alias::name "$match_line")"
-        local match_path="$(_cda::alias::path "$match_line")"
-        if [[ "$alias_name" == "$match_name" && "$abs_path" == "$match_path" ]]; then
-            if ! _cda::flag::match $FLAG_ADD_FORCED; then
-                _cda::msg::error WARNING "Duplicated: " "$match_name" "\n$(_cda::list::highlight <<< "$match_line")"
-            fi
-            return 1
-        fi
-
-        # -A --add-forced
         if ! _cda::flag::match $FLAG_ADD_FORCED; then
-            _cda::msg::error WARNING "Already Exists: " "$match_name" "\n$(_cda::list::highlight <<< "$match_line")"
+            local match_name="$(_cda::alias::name "$match_line")"
+            _cda::msg::error ERROR "Name Duplicated: " "$match_name"
+            if _cda::flag::match $FLAG_VERBOSE; then
+                _cda::list::highlight <<< "$match_line" | _cda::msg::filter $FD_STDERR >&2
+            fi
             return 1
         fi
         output_contents="$new_line\n$(_cda::list::print | \grep -v -E "^$alias_name +/.*")"
@@ -1855,9 +1859,10 @@ _cda::dir::check()
                     err_path=$(_cda::text::color -f magenta -U -- "$err_path")
                     _cda::msg::error ERROR "Permission Denied: " "" "$ok_path$err_path";;
                     
-            3|4|5)  ok_path=$(_cda::text::color -f red -- "$ok_path")
+            3|4)  ok_path=$(_cda::text::color -f red -- "$ok_path")
                     err_path=$(_cda::text::color -f red -U -- "$err_path")
                     _cda::msg::error ERROR "Not Directory: " "" "$ok_path$err_path";;
+            5)      _cda::msg::error ERROR "Not Directory: " "\"\"";;
         esac
     fi
 
@@ -1928,7 +1933,8 @@ _cda::dir::subdirs()
     local item pdir= dir="$(_cda::path::to_abs "${argpath:-$(\pwd)}")"
     [[ $fullpath == true ]] && pdir="$dir/"
     if [[ $parentdir == true ]]; then
-        \printf -- "%s\n" "$pdir."
+        \printf -- "%s\n" "$dir"
+        \printf -- "%s\n" ".."
     fi
     while IFS= \read -r item || [[ -n $item ]]
     do
@@ -1945,59 +1951,78 @@ _cda::dir::select()
     fi
 
     local abs_path="$(_cda::path::to_abs "$1")"
-    local new_abs_path= line=
-    
-    if _cda::num::is_number "${2-}"; then
-        local dirnum="$(\printf -- "%d" $((10#${2})))"
-        if [[ $dirnum -eq 0 ]]; then
-            new_abs_path=$abs_path
-        else
-            line="$(_cda::dir::subdirs -a "$abs_path" | awk "NR==$dirnum")"
-            if [[ -z $line ]]; then
-                _cda::msg::error WARNING "No Such Subdir Number: " "$2"
+    local tmp_path= line= dirnum=
+    local IFS=,
+    set -- ${2-}
+
+    while true
+    do
+        if [[ -n "${1-}" ]]; then
+            if ! _cda::num::is_number "${1-}"; then
+                _cda::msg::error ERROR "Invalid Subdir Number: " "$1"
                 return 1
             fi
-            new_abs_path="${abs_path%/}/$(\printf -- "%s\n" "$line")"
+            dirnum=$((10#${1}))
+            case $dirnum in
+                0)  line=. ;;
+                1)  line=.. ;;
+                *)  line="$(_cda::dir::subdirs -a "$abs_path" | \awk "NR==$((dirnum-1))")"
+                    if [[ -z $line ]]; then
+                        _cda::msg::error WARNING "No Such Subdir Number: " "$1" ": in: $abs_path"
+                        return 1
+                    fi
+                    ;;
+            esac
+            tmp_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
+        else
+            # count the number of lines to determine padding width
+            local dircnt="$(_cda::dir::subdirs -a -p "$abs_path" | \grep -c "")"
+            local pad_width="$(($(\wc -c <<< "$dircnt") - 1))"
+
+            if [[ -z "$(_cda::cmd::get filter)" ]]; then
+                _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 |  _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
+                return 1
+            fi
+            
+            # add line numbers and send to a filter
+            if _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX"; then
+                line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | \sed 's/^/:/' |  _cda::cmd::exec FILTER -p | \sed 's/^://')"
+            else
+                line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | _cda::cmd::exec FILTER -p)"
+            fi
+            [[ -z $line ]] && return 1
+
+            dirnum="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
+            dirnum=$((10#${dirnum}))
+            if [[ $dirnum -eq 0 ]]; then
+                line=.
+            fi
+            tmp_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
         fi
 
         if _cda::flag::match $FLAG_VERBOSE; then
-            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
+            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$tmp_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
         fi
-    else
-        # count the number of lines to determine padding width
-        local dircnt="$(_cda::dir::subdirs -a -p "$abs_path" | \grep -c "")"
-        local pad_width="$(($(\wc -c <<< "$dircnt") - 1))"
 
-        if [[ -z "$(_cda::cmd::get filter)" ]]; then
-            if _cda::msg::should_color $FD_STDERR; then
-                _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 |  _cda::list::highlight >&2
-            else
-                _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0
+        if [[ $dirnum -eq 0 ]]; then
+            \break
+        fi
+        
+        if ! _cda::dir::check --show-error "$tmp_path"; then
+            if [[ $# -eq 0 ]]; then
+                continue
             fi
             return 1
         fi
-        
-        # add line numbers and send to a filter
-        if _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX"; then
-            line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | \sed 's/^/:/' |  _cda::cmd::exec FILTER -p | \sed 's/^://')"
-        else
-            line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | _cda::cmd::exec FILTER -p)"
+
+        abs_path=$(_cda::path::to_abs "$tmp_path")
+        if [[ $# -ne 0 ]]; then
+            \shift
         fi
-        [[ -z $line ]] && return 1
-
-        # build a new path
-        new_abs_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
-
-        if _cda::flag::match $FLAG_VERBOSE; then
-            local num="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
-            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$num" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
-        fi
-    fi
-
-    if ! _cda::dir::check --show-error "$new_abs_path"; then
-        return 1
-    fi
-    \printf -- "%s" "$new_abs_path"
+    done
+    
+    abs_path=$(_cda::path::to_abs "$tmp_path")
+    \printf -- "%s" "$abs_path"
 }
 
 
@@ -2213,7 +2238,8 @@ _cda::msg::error()
         *)                  col="-f default";;
     esac
 
-    {   _cda::text::color -f $col -- "$title:"
+    {   \printf -- "%s" "$APPNAME: "
+        _cda::text::color -f $col -- "$title:"
         _cda::text::color -f default -- " $text"
         _cda::text::color $col -- "$value"
         \printf -- "%b\n" "$extra"
@@ -2297,6 +2323,10 @@ _cda::cmd::exec()
             *)  args+=("$1"); \shift;;
         esac
     done
+
+    # restore locale variables before executing
+    local LC_ALL=$_LC_ALL
+    local LANG=$_LANG
 
     if [[ $pipe == true ]]; then
         \eval "$cmd" < /dev/stdin
@@ -2447,9 +2477,11 @@ OPTIONS
     -s | --subdir
         Select a subdirectory in the alias path with a filter.
     
-    -n | --number {SUBDIR_NUMBER}
-        Select a subdirectory by number in the subdirectory mode
-        non-interactively.
+    -n | --number {SUBDIR_NUMBERS}
+        Select a subdirectory by number in the subdirectory mode.
+        Multiple numbers separated by commas like "1,3,6,0" are
+        used in turn as each subdirectory number.
+        Specify 0 to exit subdirectory mode at the current directory.
 
     -F | --cmd-filter {FILTER_COMMAND}
         Use a specified interactive filter.
