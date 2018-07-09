@@ -1436,6 +1436,10 @@ _cda::list::add()
         return 1
     fi
 
+    if ! _cda::dir::check --show-error "$abs_path"; then
+        return 1
+    fi
+
     local output_contents=
     local match_line="$(_cda::list::match -e "$alias_name")"
     local new_line="$(_cda::alias::format "$alias_name" "$abs_path")"
