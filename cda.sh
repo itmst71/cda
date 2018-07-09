@@ -158,7 +158,7 @@ _cda()
     fi
     declare -r ARG_C=${#Argv[@]}
     
-    
+
     #------------------------------------------------
     # Check the number of args
     #------------------------------------------------
@@ -1009,6 +1009,10 @@ _cda::option::parse()
                 ;;
         esac
     done
+
+    if [[ -n $Optarg_number && ! "${Argv[0]-}" =~ (/|^[.~]) ]] && ! _cda::flag::match $FLAG_SUBDIR; then
+        _cda::msg::error WARNING "-n or --number works in the subdirectory mode"
+    fi
 
     # check ambiguous options
     if [[ "$completion" == true && ${#err_amb[@]} -ne 0 ]]; then
@@ -1929,7 +1933,8 @@ _cda::dir::subdirs()
     local item pdir= dir="$(_cda::path::to_abs "${argpath:-$(\pwd)}")"
     [[ $fullpath == true ]] && pdir="$dir/"
     if [[ $parentdir == true ]]; then
-        \printf -- "%s\n" "$pdir."
+        \printf -- "%s\n" "$dir"
+        \printf -- "%s\n" ".."
     fi
     while IFS= \read -r item || [[ -n $item ]]
     do
@@ -1937,7 +1942,6 @@ _cda::dir::subdirs()
         [[ $nolink == true && -L "$dir/$item" ]] && continue
         \printf -- "%s\n" "$pdir$item"
     done < <(\ls -1$alldirs -- "$dir")
-    \printf -- "%s\n" ".."
 }
 
 _cda::dir::select()
@@ -1953,35 +1957,30 @@ _cda::dir::select()
 
     while true
     do
-        if _cda::num::is_number "${1-}"; then
-            dirnum="$(\printf -- "%d" $((10#${1})))"
-            if [[ $dirnum -eq 0 ]]; then
-                tmp_path=$abs_path
-                \break
-            else
-                line="$(_cda::dir::subdirs -a "$abs_path" | \awk "NR==$dirnum")"
-                if [[ -z $line ]]; then
-                    _cda::msg::error WARNING "No Such Subdir Number: " "$1" ": in: $abs_path"
-                    return 1
-                fi
-                # build a new path
-                tmp_path="${abs_path%/}/$(\printf -- "%s\n" "$line")"
+        if [[ -n "${1-}" ]]; then
+            if ! _cda::num::is_number "${1-}"; then
+                _cda::msg::error ERROR "Invalid Subdir Number: " "$1"
+                return 1
             fi
-
-            if _cda::flag::match $FLAG_VERBOSE; then
-                \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$tmp_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
-            fi
+            dirnum=$((10#${1}))
+            case $dirnum in
+                0)  line=. ;;
+                1)  line=.. ;;
+                *)  line="$(_cda::dir::subdirs -a "$abs_path" | \awk "NR==$((dirnum-1))")"
+                    if [[ -z $line ]]; then
+                        _cda::msg::error WARNING "No Such Subdir Number: " "$1" ": in: $abs_path"
+                        return 1
+                    fi
+                    ;;
+            esac
+            tmp_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
         else
             # count the number of lines to determine padding width
             local dircnt="$(_cda::dir::subdirs -a -p "$abs_path" | \grep -c "")"
             local pad_width="$(($(\wc -c <<< "$dircnt") - 1))"
 
             if [[ -z "$(_cda::cmd::get filter)" ]]; then
-                if _cda::msg::should_color $FD_STDERR; then
-                    _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 |  _cda::list::highlight >&2
-                else
-                    _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0
-                fi
+                _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 |  _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
                 return 1
             fi
             
@@ -1993,17 +1992,19 @@ _cda::dir::select()
             fi
             [[ -z $line ]] && return 1
 
-            # build a new path
-            tmp_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
-
-            if _cda::flag::match $FLAG_VERBOSE; then
-                dirnum="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
-                dirnum="$(\printf -- "%d" $((10#${dirnum})))"
-                \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$tmp_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
+            dirnum="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
+            dirnum=$((10#${dirnum}))
+            if [[ $dirnum -eq 0 ]]; then
+                line=.
             fi
+            tmp_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
         fi
 
-        if [[ -z "$tmp_path" || "$tmp_path" =~ /\.$ ]]; then
+        if _cda::flag::match $FLAG_VERBOSE; then
+            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$tmp_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
+        fi
+
+        if [[ $dirnum -eq 0 ]]; then
             \break
         fi
         
@@ -2013,12 +2014,13 @@ _cda::dir::select()
             fi
             return 1
         fi
+
         abs_path=$(_cda::path::to_abs "$tmp_path")
         if [[ $# -ne 0 ]]; then
             \shift
         fi
     done
-
+    
     abs_path=$(_cda::path::to_abs "$tmp_path")
     \printf -- "%s" "$abs_path"
 }
@@ -2236,7 +2238,8 @@ _cda::msg::error()
         *)                  col="-f default";;
     esac
 
-    {   _cda::text::color -f $col -- "$title:"
+    {   \printf -- "%s" "$APPNAME: "
+        _cda::text::color -f $col -- "$title:"
         _cda::text::color -f default -- " $text"
         _cda::text::color $col -- "$value"
         \printf -- "%b\n" "$extra"
