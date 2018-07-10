@@ -179,7 +179,8 @@ _cda()
 
     # check options requiring NO args
     tmp_flags=$((Flags & (FLAG_VERSION | FLAG_HELP_SHORT | FLAG_HELP_FULL
-            | FLAG_LIST_FILES | FLAG_EDIT_LIST | FLAG_SHOW_CONFIG | FLAG_RELOAD_CONFIG | FLAG_RESET_CONFIG | FLAG_EDIT_CONFIG)))
+            | FLAG_LIST_FILES | FLAG_EDIT_LIST | FLAG_SHOW_CONFIG | FLAG_RELOAD_CONFIG
+            | FLAG_RESET_CONFIG | FLAG_EDIT_CONFIG | FLAG_USE)))
     if [[ $tmp_flags -ne $FLAG_NONE && $ARG_C -ne 0 ]]; then
         _cda::msg::error WARNING "Unnecessary Arguments Given: " "${Argv[*]}"
     fi
