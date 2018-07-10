@@ -2652,7 +2652,12 @@ _cda::completion::exec()
         \setopt localoptions AUTO_PARAM_SLASH
         \setopt localoptions LIST_TYPES
     fi
-    
+
+    # reset
+    if [[ -n ${BASH_VERSION-} ]]; then
+        \complete -F _cda::completion::exec $CDA_EXEC_NAME
+    fi
+
     COMPREPLY=()
     local curr="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
@@ -2689,7 +2694,6 @@ _cda::completion::exec()
         
         # the user is inputting a new value
         elif [[ $prev =~ ^(-[a-zA-Z0-9]*[an]|--add|--number)$ ]] ; then
-            COMPREPLY=
             return 0
 
         # complements option name
@@ -2743,6 +2747,9 @@ _cda::completion::exec()
 
     # complements a directory path
     if [[ $curr =~ (/|^[.~]/?) || $COMP_LINE =~ \ (-[a-zA-Z0-9]*[aA]|--add(-forced)?)\ +[a-zA-Z0-9_]+\  ]]; then
+        if [[ -n ${BASH_VERSION-} ]]; then
+            \complete -o dirnames -F _cda::completion::exec $CDA_EXEC_NAME
+        fi
         COMPREPLY=($(\compgen -- "$curr"))
         return $? 
 
