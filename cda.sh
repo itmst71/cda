@@ -1,13 +1,7 @@
 # source(.) this file in ~/.bashrc or ~/.zshrc
 # cda requires Bash 3.2+ or Zsh 5.0+
-
-if [[ -n ${BASH_VERSION-} ]]; then 
-    CDA_SRC_ROOT="$(builtin cd -- "$(\dirname -- "$BASH_SOURCE")" && \pwd)"
-    CDA_SRC_FILE="$CDA_SRC_ROOT/${BASH_SOURCE##*/}"
-elif [[ -n ${ZSH_VERSION-} ]]; then
-    CDA_SRC_ROOT="${${(%):-%x}:A:h}"
-    CDA_SRC_FILE="${${(%):-%x}:A}"
-else
+if [ -z "${BASH_VERSION-}" -a -z "${ZSH_VERSION-}" ]; then 
+    \printf -- "cda: FATAL: cda requires Bash 3.2+ or Zsh 5.0+\n" >&2
     return 1
 fi
 
@@ -288,13 +282,13 @@ _cda()
         return $?
     fi
 
-    # -c, --check
+    # -c --check
     if _cda::flag::match $FLAG_CHECK; then
         _cda::list::check "${Argv[@]-}"
         return $?
     fi
 
-    # -C | --clean
+    # -C --clean
     if _cda::flag::match $FLAG_CLEAN; then
         _cda::list::check --clean "${Argv[@]-}"
         return $?
@@ -660,6 +654,13 @@ _cda::config::manage()
 __EOCFG__
         ;;
         --show)
+            if [[ -n ${BASH_VERSION-} ]]; then 
+                local CDA_SRC_ROOT="$(builtin cd -- "$(\dirname -- "$BASH_SOURCE")" && \pwd)"
+                local CDA_SRC_FILE="$CDA_SRC_ROOT/${BASH_SOURCE##*/}"
+            elif [[ -n ${ZSH_VERSION-} ]]; then
+                local CDA_SRC_ROOT="${${(%):-%x}:A:h}"
+                local CDA_SRC_FILE="${${(%):-%x}:A}"
+            fi
 << __EOCFG__ \cat
 CDA_SRC_ROOT="$CDA_SRC_ROOT"
 CDA_SRC_FILE="$CDA_SRC_FILE"
@@ -2778,6 +2779,6 @@ _cda::completion::exec()
 CDA_INITIALIZED=false
 _cda
 if [[ $? -ne 0 ]]; then
-    \printf -- "cda: ERROR: Failed to initialize\n"
+    \printf -- "cda: FATAL: Failed to initialize\n" >&2
     return 1
 fi
