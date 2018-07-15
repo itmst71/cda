@@ -21,8 +21,8 @@ _cda()
     CDA_DATA_ROOT="${CDA_DATA_ROOT:-$HOME/.cda}"
 
     # save locale variables before overriding
-    local _LC_ALL=$LC_ALL
-    local _LANG=$LANG
+    declare -r _LC_ALL=$LC_ALL
+    declare -r _LANG=$LANG
 
     # override system variables
     local IFS=$' \t\n'
