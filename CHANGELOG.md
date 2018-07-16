@@ -1,4 +1,11 @@
 # Change Log
+## v1.5.0 (2018-07-16)
+* Added new options --reload-config and --reset-config
+* Enhanced the subdir mode to be called recursively until tha path decided
+* Enabled to add a new alias with the subdir mode like
+* Improved Bash-Completion for zsh
+* Fixed the error when using -o to open a path with nautilus on some environments
+
 ## v1.4.0 (2018-05-28)
 * Use args in an exact order for partial match search
 * Removed the Auto-Alias feature
