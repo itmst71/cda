@@ -34,7 +34,7 @@ _cda()
     #------------------------------------------------
     # app info
     declare -r APPNAME="cda"
-    declare -r VERSION="1.4.0 (2018-05-28)"
+    declare -r VERSION="1.5.0 (2018-07-16)"
 
     # save whether the stdin/out/err of the main function is TTY or not.
     [[ -t 0 ]]
