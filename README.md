@@ -342,26 +342,6 @@ QUERY>                                       (1/4) [1/1]
 :3       subdir3_of_foo
 ```
 
-* `-s` `--subdir` is equivalent to following 2 examples
-```console
-$ cda foo
-$ cda .
-QUERY>                                       (1/4) [1/1]
-:0       .
-:1       subdir1_of_foo
-:2       subdir2_of_foo
-:3       subdir3_of_foo
-```
-
-```console
-$ cda "`cda -p foo`"
-QUERY>                                       (1/4) [1/1]
-:0       .
-:1       subdir1_of_foo
-:2       subdir2_of_foo
-:3       subdir3_of_foo
-```
-
 * If you specify a subdirectory number with the second argument, you can confirm the selection without the filter.
 ```console
 $ cda ./troublesome_names_for_input 2
@@ -374,6 +354,25 @@ $ pwd
 $ cda -s troublesome -n 6
 $ pwd
 /home/user/troublesome_names_for_input/日本語
+```
+
+* The subdir mode is called recursively until you decide a path to use.  
+Using an interactive filter you can do it interactively with ease.   
+And you can give multiple subdir numbers separated by comma to drill down subdirs non-interactively.  
+The numbers are used in order. Setting 0 at the last of the numbers, the subdir path at that moment will be used.
+```console
+$ cda / --verbose
+7                /home
+2                /home/itmst
+4                /home/itmst/.cda
+2                /home/itmst/.cda/lists
+0                /home/itmst/.cda/lists/.
+$ pwd
+/home/itmst/.cda/lists
+$ cd /
+$ cda . -n 7,2,4,2,0
+$ pwd
+/home/itmst/.cda/lists
 ```
 
 # Config Variables

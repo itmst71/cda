@@ -1,12 +1,7 @@
 # source(.) this file in ~/.bashrc or ~/.zshrc
 # cda requires Bash 3.2+ or Zsh 5.0+
-if [[ -n ${BASH_VERSION-} ]]; then 
-    CDA_SRC_ROOT="$(builtin cd -- "$(\dirname -- "$BASH_SOURCE")" && \pwd)"
-    CDA_SRC_FILE="$CDA_SRC_ROOT/${BASH_SOURCE##*/}"
-elif [[ -n ${ZSH_VERSION-} ]]; then
-    CDA_SRC_ROOT="${${(%):-%x}:A:h}"
-    CDA_SRC_FILE="${${(%):-%x}:A}"
-else
+if [ -z "${BASH_VERSION-}" -a -z "${ZSH_VERSION-}" ]; then 
+    \printf -- "cda: FATAL: cda requires Bash 3.2+ or Zsh 5.0+\n" >&2
     return 1
 fi
 
@@ -25,17 +20,21 @@ _cda()
     # set the root directory path
     CDA_DATA_ROOT="${CDA_DATA_ROOT:-$HOME/.cda}"
 
-    #------------------------------------------------
-    # Constant variables
-    #------------------------------------------------
-    # app info
-    declare -r APPNAME="cda"
-    declare -r VERSION="1.4.0 (2018-05-28)"
+    # save locale variables before overriding
+    declare -r _LC_ALL=$LC_ALL
+    declare -r _LANG=$LANG
 
     # override system variables
     local IFS=$' \t\n'
     local LC_ALL=C
     local LANG=C
+
+    #------------------------------------------------
+    # Constant variables
+    #------------------------------------------------
+    # app info
+    declare -r APPNAME="cda"
+    declare -r VERSION="1.5.0 (2018-07-16)"
 
     # save whether the stdin/out/err of the main function is TTY or not.
     [[ -t 0 ]]
@@ -74,15 +73,17 @@ _cda()
     declare -r FLAG_EDIT_LIST=$((1<<14))
     declare -r FLAG_EDIT_CONFIG=$((1<<15))
     declare -r FLAG_SHOW_CONFIG=$((1<<16))
-    declare -r FLAG_LIST_NAMES=$((1<<17))
-    declare -r FLAG_LIST_PATHS=$((1<<18))
-    declare -r FLAG_CHECK=$((1<<19))
-    declare -r FLAG_CLEAN=$((1<<20))
-    declare -r FLAG_OVERWRITE=$((1<<21))
-    declare -r FLAG_FILTER_FORCED=$((1<<22))
-    declare -r FLAG_SUBDIR=$((1<<23))
-    declare -r FLAG_BUILTIN_CD=$((1<<24))
-    declare -r FLAG_VERBOSE=$((1<<25))
+    declare -r FLAG_RELOAD_CONFIG=$((1<<17))
+    declare -r FLAG_RESET_CONFIG=$((1<<18))
+    declare -r FLAG_LIST_NAMES=$((1<<19))
+    declare -r FLAG_LIST_PATHS=$((1<<20))
+    declare -r FLAG_CHECK=$((1<<21))
+    declare -r FLAG_CLEAN=$((1<<22))
+    declare -r FLAG_OVERWRITE=$((1<<23))
+    declare -r FLAG_FILTER_FORCED=$((1<<24))
+    declare -r FLAG_SUBDIR=$((1<<25))
+    declare -r FLAG_BUILTIN_CD=$((1<<26))
+    declare -r FLAG_VERBOSE=$((1<<27))
     
     declare -r FLAGS_INCOMPAT=$((
           FLAG_HELP_SHORT | FLAG_HELP_FULL | FLAG_VERSION
@@ -90,7 +91,8 @@ _cda()
         | FLAG_EDIT_LIST | FLAG_EDIT_CONFIG | FLAG_PATH
         | FLAG_LIST_NAMES | FLAG_LIST_PATHS | FLAG_LIST
         | FLAG_LIST_FILES | FLAG_OPEN | FLAG_USE | FLAG_REMOVE_LIST
-        | FLAG_CHECK | FLAG_CLEAN | FLAG_SHOW_CONFIG))
+        | FLAG_CHECK | FLAG_CLEAN | FLAG_SHOW_CONFIG
+        | FLAG_RELOAD_CONFIG | FLAG_RESET_CONFIG))
 
     # default config variables
     declare -r CDA_EXEC_NAME_DEFAULT=cda
@@ -150,14 +152,14 @@ _cda()
     fi
     declare -r ARG_C=${#Argv[@]}
     
-    
+
     #------------------------------------------------
     # Check the number of args
     #------------------------------------------------
     local tmp_flags
 
     # set FLAG_CD
-    tmp_flags=$((Flags & ~(FLAG_USE_TEMP | FLAG_FILTER_FORCED | FLAG_MULTIPLEXER | FLAG_SUBDIR | FLAG_BUILTIN_CD | FLAG_VERBOSE)))
+    tmp_flags=$((Flags & ~(FLAG_USE_TEMP | FLAG_FILTER_FORCED | FLAG_SUBDIR | FLAG_BUILTIN_CD | FLAG_VERBOSE)))
     if [[ $tmp_flags -eq $FLAG_NONE ]]; then
         _cda::flag::set $FLAG_CD || return 1
     fi
@@ -171,7 +173,8 @@ _cda()
 
     # check options requiring NO args
     tmp_flags=$((Flags & (FLAG_VERSION | FLAG_HELP_SHORT | FLAG_HELP_FULL
-            | FLAG_LIST_FILES | FLAG_EDIT_LIST | FLAG_SHOW_CONFIG | FLAG_EDIT_CONFIG)))
+            | FLAG_LIST_FILES | FLAG_EDIT_LIST | FLAG_SHOW_CONFIG | FLAG_RELOAD_CONFIG
+            | FLAG_RESET_CONFIG | FLAG_EDIT_CONFIG | FLAG_USE)))
     if [[ $tmp_flags -ne $FLAG_NONE && $ARG_C -ne 0 ]]; then
         _cda::msg::error WARNING "Unnecessary Arguments Given: " "${Argv[*]}"
     fi
@@ -279,13 +282,13 @@ _cda()
         return $?
     fi
 
-    # -c, --check
+    # -c --check
     if _cda::flag::match $FLAG_CHECK; then
         _cda::list::check "${Argv[@]-}"
         return $?
     fi
 
-    # -C | --clean
+    # -C --clean
     if _cda::flag::match $FLAG_CLEAN; then
         _cda::list::check --clean "${Argv[@]-}"
         return $?
@@ -321,7 +324,19 @@ _cda()
 
     # --show-config
     if _cda::flag::match $FLAG_SHOW_CONFIG; then
-        _cda::config::show
+        _cda::config::manage --show
+        return $?
+    fi
+
+    # --reload-config
+    if _cda::flag::match $FLAG_RELOAD_CONFIG; then
+        _cda::config::manage --reload
+        return $?
+    fi
+
+    # --reset-config
+    if _cda::flag::match $FLAG_RESET_CONFIG; then
+        _cda::config::manage --remake
         return $?
     fi
 
@@ -341,6 +356,10 @@ _cda::setup::init()
     # load user config
     if [[ -f "$CONFIG_FILE" ]]; then
         . "$CONFIG_FILE"
+        if [[ $? -ne 0 ]]; then
+            _cda::msg::error ERROR "Failed to load config: " "$CONFIG_FILE"
+            return 1
+        fi
     fi
 
     # define the function with the name defined by the user to call the main function _cda
@@ -374,6 +393,7 @@ _cda::setup::init()
     CDA_BASH_COMPLETION="${CDA_BASH_COMPLETION:-$CDA_BASH_COMPLETION_DEFAULT}"
     if _cda::utils::is_true "$CDA_BASH_COMPLETION"; then
         if [[ -n ${ZSH_VERSION-} ]]; then
+            \autoload -U +X compinit && compinit
             \autoload -U +X bashcompinit && bashcompinit
         fi
         \complete -o default -o dirnames -F _cda::completion::exec $CDA_EXEC_NAME
@@ -454,7 +474,7 @@ _cda::setup::paths()
             _cda::msg::error FATAL "Could not create a file: " "$CONFIG_FILE"
             return 1
         fi
-        _cda::config::create
+        _cda::config::manage --create
     fi
 
     # is the config file readable?
@@ -615,8 +635,10 @@ _cda::setup::use()
 #------------------------------------------------
 # _cda::config
 #------------------------------------------------
-_cda::config::create()
+_cda::config::manage()
 {
+    case "$1" in
+        --create)
 << __EOCFG__ \cat > "$CONFIG_FILE"
 # CDA_EXEC_NAME=$CDA_EXEC_NAME_DEFAULT
 # CDA_BASH_COMPLETION=$CDA_BASH_COMPLETION_DEFAULT
@@ -630,10 +652,15 @@ _cda::config::create()
 # CDA_LIST_HIGHLIGHT_COLOR="$CDA_LIST_HIGHLIGHT_COLOR_DEFAULT"
 # CDA_ALIAS_MAX_LEN=$CDA_ALIAS_MAX_LEN_DEFAULT
 __EOCFG__
-}
-
-_cda::config::show()
-{
+        ;;
+        --show)
+            if [[ -n ${BASH_VERSION-} ]]; then 
+                local CDA_SRC_ROOT="$(builtin cd -- "$(\dirname -- "$BASH_SOURCE")" && \pwd)"
+                local CDA_SRC_FILE="$CDA_SRC_ROOT/${BASH_SOURCE##*/}"
+            elif [[ -n ${ZSH_VERSION-} ]]; then
+                local CDA_SRC_ROOT="${${(%):-%x}:A:h}"
+                local CDA_SRC_FILE="${${(%):-%x}:A}"
+            fi
 << __EOCFG__ \cat
 CDA_SRC_ROOT="$CDA_SRC_ROOT"
 CDA_SRC_FILE="$CDA_SRC_FILE"
@@ -650,8 +677,41 @@ CDA_COLOR_MODE=${CDA_COLOR_MODE:-$CDA_COLOR_MODE_DEFAULT}
 CDA_LIST_HIGHLIGHT_COLOR="${CDA_LIST_HIGHLIGHT_COLOR:-$CDA_LIST_HIGHLIGHT_COLOR_DEFAULT}"
 CDA_ALIAS_MAX_LEN=$CDA_ALIAS_MAX_LEN
 __EOCFG__
-}
+        ;;
+        --reload)
+            if _cda::utils::is_true "$CDA_BASH_COMPLETION"; then
+                \complete -r $CDA_EXEC_NAME
+            fi
+            local _cda_exec_name=$CDA_EXEC_NAME
+            unset $CDA_EXEC_NAME
+            unset CDA_EXEC_NAME
+            unset CDA_BASH_COMPLETION
+            unset CDA_MATCH_EXACT_ORDER
+            unset CDA_CMD_FILTER
+            unset CDA_CMD_OPEN
+            unset CDA_CMD_EDITOR
+            unset CDA_FILTER_LINE_PREFIX
+            unset CDA_BUILTIN_CD
+            unset CDA_COLOR_MODE
+            unset CDA_LIST_HIGHLIGHT_COLOR
+            unset CDA_ALIAS_MAX_LEN
+            CDA_INITIALIZED=false
+            if ! _cda::setup::init; then
+                return 1
+            fi
+            if [[ "$_cda_exec_name" != "$CDA_EXEC_NAME" ]]; then
+                _cda::msg::error NOTICE "Exec Name Changed: " "$_cda_exec_name -> $CDA_EXEC_NAME"
+            fi
+            ;;
+        --remake)
+            _cda::config::manage --create
+            _cda::config::manage --reload
+            ;;
 
+        *) _cda::msg::internal_error "Illegal Option: " "$1";
+        return 1;;
+    esac
+}
 
 #------------------------------------------------
 # _cda::flag
@@ -704,6 +764,8 @@ _cda::option::to_flag()
         --list-paths)           \printf -- $FLAG_LIST_PATHS;;
         --config)               \printf -- $FLAG_EDIT_CONFIG;;
         --show-config)          \printf -- $FLAG_SHOW_CONFIG;;
+        --reload-config)        \printf -- $FLAG_RELOAD_CONFIG;;
+        --reset-config)         \printf -- $FLAG_RESET_CONFIG;;
 
         -E | --cmd-editor)      \printf -- $FLAG_NONE;;
         -F | --cmd-filter)      \printf -- $FLAG_NONE;;
@@ -731,12 +793,52 @@ _cda::option::set()
 _cda::option::parse()
 {
     local rtn=0
-    local Err_incompat err_noarg_s err_noarg_l err_undef_s err_undef_l
+    local Err_incompat err_noarg_s err_noarg_l err_undef_s err_undef_l err_amb
     Err_incompat=()
     err_noarg_s=()
     err_noarg_l=()
     err_undef_s=()
     err_undef_l=()
+    err_amb=()
+
+    local comp longopts= completion=false
+    if _cda::utils::is_true "$CDA_BASH_COMPLETION"; then
+        completion=true
+        comp=()
+        longopts="
+        --add
+        --add-forced
+        --builtin-cd
+        --check
+        --clean	
+        --edit
+        --cmd-editor
+        --cmd-filter
+        --filter
+        --help
+        --help-full
+        --list
+        --list-files
+        --number
+        --open
+        --cmd-open
+        --path
+        --remove
+        --remove-list
+        --subdir
+        --use
+        --use-temp
+        --verbose
+        --version
+        --list-names
+        --list-paths
+        --color
+        --config
+        --show-config
+        --reload-config
+        --reset-config
+        "
+    fi
 
     local optname optarg is_split_optarg
     local op detected_opts rest_opts shift_cnt
@@ -758,6 +860,11 @@ _cda::option::parse()
             fi
         fi
 
+        comp=($(\printf "%s\n" -- $longopts | \grep -E -- "^$optname"))
+        if [[ ${#comp[@]} -eq 1 ]]; then
+            optname=${comp[0]}
+        fi
+        
         case "$optname" in
             # options requiring arg
             -a | --add | \
@@ -819,7 +926,10 @@ _cda::option::parse()
             --version | \
             --list-names | \
             --list-paths | \
-            --config | --show-config \
+            --config | \
+            --show-config | \
+            --reload-config | \
+            --reset-config \
             )
                 _cda::option::set $optname || return 1
                 \shift
@@ -830,7 +940,11 @@ _cda::option::parse()
                 \break
                 ;;
             --*)
-                err_undef_l+=("$optname")
+                if [[ "$completion" == true && ${#comp[@]} -ge 2 ]]; then
+                    err_amb+=("$optname")
+                else
+                    err_undef_l+=("$optname")
+                fi
                 \shift
                 ;;
             -)
@@ -896,6 +1010,22 @@ _cda::option::parse()
                 ;;
         esac
     done
+
+    if [[ -n $Optarg_number && ! "${Argv[0]-}" =~ (/|^[.~]) ]] && ! _cda::flag::match $FLAG_SUBDIR; then
+        _cda::msg::error WARNING "-n or --number works in the subdirectory mode"
+    fi
+
+    # check ambiguous options
+    if [[ ${#err_amb[@]} -ne 0 ]]; then
+        local amb ambs
+        ambs=()
+        for amb in $(<<< "${err_amb[@]}" \tr " " "\n" | \sort | \uniq)
+        do
+            ambs=($(\printf "%s\n" -- $longopts | \grep -E -- "^$amb"))
+            _cda::msg::error WARNING "Ambiguous Option Name: " "$amb" "\n$(_cda::text::color -f yellow -- "")" "${ambs[*]}"
+        done
+        rtn=1
+    fi
 
     local msg
 
@@ -1233,7 +1363,7 @@ _cda::list::select()
     fi
 
     if _cda::flag::match $FLAG_VERBOSE; then
-        _cda::list::highlight <<< "$line" | _cda::msg::filter 2 >&2
+        _cda::list::highlight <<< "$line" | _cda::msg::filter $FD_STDERR >&2
     fi
 
     \printf -- "%s" "$line"
@@ -1273,7 +1403,7 @@ _cda::list::path()
     else
         _cda::msg::error WARNING "No Alias Added: " "$USING_LIST_FILE"
     fi
-    
+
     [[ -z $abs_path ]] && return 1
     \printf -- "%s" "$abs_path"
 }
@@ -1288,8 +1418,7 @@ _cda::list::add()
 
     # alias name
     local alias_name="${1-}"
-    local strict="$(_cda::flag::match $FLAG_MULTIPLEXER || \printf -- "--strict")"
-    if ! _cda::alias::validate --name $strict "$alias_name"; then
+    if ! _cda::alias::validate --name --strict "$alias_name"; then
         _cda::msg::error ERROR "Invalid Alias Name: " "$alias_name"
         return 1
     fi
@@ -1301,6 +1430,14 @@ _cda::list::add()
         rel_path=$(\pwd)
     fi
     local abs_path="$(_cda::path::to_abs "$rel_path")"
+
+    if _cda::flag::match $FLAG_SUBDIR; then
+        abs_path=$(_cda::dir::select "$abs_path" "$Optarg_number")
+    fi
+    if [[ -z "$abs_path" ]]; then
+        return 1
+    fi
+
     if ! _cda::dir::check --show-error "$abs_path"; then
         return 1
     fi
@@ -1313,28 +1450,21 @@ _cda::list::add()
     if [[ -z $match_line ]]; then
         output_contents="$new_line\n$(_cda::list::print 2>/dev/null)"
 
-    # already exist
+    # -A --add-forced
     else
-        # check duplicated
-        local match_name="$(_cda::alias::name "$match_line")"
-        local match_path="$(_cda::alias::path "$match_line")"
-        if [[ "$alias_name" == "$match_name" && "$abs_path" == "$match_path" ]]; then
-            if ! _cda::flag::match $FLAG_ADD_FORCED; then
-                _cda::msg::error WARNING "Duplicated: " "$match_name" "\n$(_cda::list::highlight <<< "$match_line")"
-            fi
-            return 1
-        fi
-
-        # -A --add-forced
         if ! _cda::flag::match $FLAG_ADD_FORCED; then
-            _cda::msg::error WARNING "Already Exists: " "$match_name" "\n$(_cda::list::highlight <<< "$match_line")"
+            local match_name="$(_cda::alias::name "$match_line")"
+            _cda::msg::error ERROR "Name Duplicated: " "$match_name"
+            if _cda::flag::match $FLAG_VERBOSE; then
+                _cda::list::highlight <<< "$match_line" | _cda::msg::filter $FD_STDERR >&2
+            fi
             return 1
         fi
         output_contents="$new_line\n$(_cda::list::print | \grep -v -E "^$alias_name +/.*")"
     fi
 
     if _cda::flag::match $FLAG_VERBOSE; then
-        _cda::list::highlight <<< "$new_line" | _cda::msg::filter 2 >&2
+        _cda::list::highlight <<< "$new_line" | _cda::msg::filter $FD_STDERR >&2
     fi
 
     # output to the list file
@@ -1408,7 +1538,7 @@ _cda::list::remove()
 
     if _cda::flag::match $FLAG_VERBOSE; then
         local match_lines="$(_cda::list::match -e "${remove_names[@]}")"
-        <<< "$match_lines" \sed 's/^/'$'\033''\[0;0;31mRemoved: '$'\033''\[0m/g' |  _cda::msg::filter 2 >&2
+        <<< "$match_lines" \sed 's/^/'$'\033''\[0;0;31mRemoved: '$'\033''\[0m/g' |  _cda::msg::filter $FD_STDERR >&2
     fi
 
     local regexp="^($(_cda::text::join ' +|' ${remove_names[@]}) +)"
@@ -1734,9 +1864,10 @@ _cda::dir::check()
                     err_path=$(_cda::text::color -f magenta -U -- "$err_path")
                     _cda::msg::error ERROR "Permission Denied: " "" "$ok_path$err_path";;
                     
-            3|4|5)  ok_path=$(_cda::text::color -f red -- "$ok_path")
+            3|4)  ok_path=$(_cda::text::color -f red -- "$ok_path")
                     err_path=$(_cda::text::color -f red -U -- "$err_path")
                     _cda::msg::error ERROR "Not Directory: " "" "$ok_path$err_path";;
+            5)      _cda::msg::error ERROR "Not Directory: " "\"\"";;
         esac
     fi
 
@@ -1807,7 +1938,8 @@ _cda::dir::subdirs()
     local item pdir= dir="$(_cda::path::to_abs "${argpath:-$(\pwd)}")"
     [[ $fullpath == true ]] && pdir="$dir/"
     if [[ $parentdir == true ]]; then
-        \printf -- "%s\n" "$pdir."
+        \printf -- "%s\n" "$dir"
+        \printf -- "%s\n" ".."
     fi
     while IFS= \read -r item || [[ -n $item ]]
     do
@@ -1824,59 +1956,78 @@ _cda::dir::select()
     fi
 
     local abs_path="$(_cda::path::to_abs "$1")"
-    local new_abs_path= line=
-    
-    if _cda::num::is_number "${2-}"; then
-        local dirnum="$(\printf -- "%d" $((10#${2})))"
-        if [[ $dirnum -eq 0 ]]; then
-            new_abs_path=$abs_path
-        else
-            line="$(_cda::dir::subdirs -a "$abs_path" | awk "NR==$dirnum")"
-            if [[ -z $line ]]; then
-                _cda::msg::error WARNING "No Such Subdir Number: " "$2"
+    local tmp_path= line= dirnum=
+    local IFS=,
+    set -- ${2-}
+
+    while true
+    do
+        if [[ -n "${1-}" ]]; then
+            if ! _cda::num::is_number "${1-}"; then
+                _cda::msg::error ERROR "Invalid Subdir Number: " "$1"
                 return 1
             fi
-            new_abs_path="${abs_path%/}/$(\printf -- "%s\n" "$line")"
+            dirnum=$((10#${1}))
+            case $dirnum in
+                0)  line=. ;;
+                1)  line=.. ;;
+                *)  line="$(_cda::dir::subdirs -a "$abs_path" | \awk "NR==$((dirnum-1))")"
+                    if [[ -z $line ]]; then
+                        _cda::msg::error WARNING "No Such Subdir Number: " "$1" ": in: $abs_path"
+                        return 1
+                    fi
+                    ;;
+            esac
+            tmp_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
+        else
+            # count the number of lines to determine padding width
+            local dircnt="$(_cda::dir::subdirs -a -p "$abs_path" | \grep -c "")"
+            local pad_width="$(($(\wc -c <<< "$dircnt") - 1))"
+
+            if [[ -z "$(_cda::cmd::get filter)" ]]; then
+                _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 |  _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
+                return 1
+            fi
+            
+            # add line numbers and send to a filter
+            if _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX"; then
+                line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | \sed 's/^/:/' |  _cda::cmd::exec FILTER -p | \sed 's/^://')"
+            else
+                line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | _cda::cmd::exec FILTER -p)"
+            fi
+            [[ -z $line ]] && return 1
+
+            dirnum="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
+            dirnum=$((10#${dirnum}))
+            if [[ $dirnum -eq 0 ]]; then
+                line=.
+            fi
+            tmp_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
         fi
 
         if _cda::flag::match $FLAG_VERBOSE; then
-            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter 2 >&2
+            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$dirnum" "$tmp_path" | _cda::list::highlight | _cda::msg::filter $FD_STDERR >&2
         fi
-    else
-        # count the number of lines to determine padding width
-        local dircnt="$(_cda::dir::subdirs -a -p "$abs_path" | \grep -c "")"
-        local pad_width="$(($(\wc -c <<< "$dircnt") - 1))"
 
-        if [[ -z "$(_cda::cmd::get filter)" ]]; then
-            if _cda::msg::should_color $FD_STDERR; then
-                _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 |  _cda::list::highlight >&2
-            else
-                _cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0
+        if [[ $dirnum -eq 0 ]]; then
+            \break
+        fi
+        
+        if ! _cda::dir::check --show-error "$tmp_path"; then
+            if [[ $# -eq 0 ]]; then
+                continue
             fi
             return 1
         fi
-        
-        # add line numbers and send to a filter
-        if _cda::utils::is_true "$CDA_FILTER_LINE_PREFIX"; then
-            line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | \sed 's/^/:/' |  _cda::cmd::exec FILTER -p | \sed 's/^://')"
-        else
-            line="$(_cda::dir::subdirs -a -p "$abs_path" | \nl -n rz -w $pad_width -v 0 | _cda::cmd::exec FILTER -p)"
+
+        abs_path=$(_cda::path::to_abs "$tmp_path")
+        if [[ $# -ne 0 ]]; then
+            \shift
         fi
-        [[ -z $line ]] && return 1
-
-        # build a new path
-        new_abs_path="${abs_path%/}/$(\printf -- "%s\n" "$line" | \sed -e 's/^[0-9]\{1,\}'$'\t''//')"
-
-        if _cda::flag::match $FLAG_VERBOSE; then
-            local num="$(<<< "$line" \sed 's/^\([0-9]\{1,\}\).*/\1/')"
-            \printf -- "%-${CDA_ALIAS_MAX_LEN}s %s\n" "$num" "$new_abs_path" | _cda::list::highlight | _cda::msg::filter 2 >&2
-        fi
-    fi
-
-    if ! _cda::dir::check --show-error "$new_abs_path"; then
-        return 1
-    fi
-    \printf -- "%s" "$new_abs_path"
+    done
+    
+    abs_path=$(_cda::path::to_abs "$tmp_path")
+    \printf -- "%s" "$abs_path"
 }
 
 
@@ -2092,11 +2243,12 @@ _cda::msg::error()
         *)                  col="-f default";;
     esac
 
-    {   _cda::text::color -f $col -- "$title:"
+    {   \printf -- "%s" "$APPNAME: "
+        _cda::text::color -f $col -- "$title:"
         _cda::text::color -f default -- " $text"
         _cda::text::color $col -- "$value"
         \printf -- "%b\n" "$extra"
-    } | _cda::msg::filter 2 >&2
+    } | _cda::msg::filter $FD_STDERR >&2
 }
 
 _cda::msg::internal_error()
@@ -2176,6 +2328,10 @@ _cda::cmd::exec()
             *)  args+=("$1"); \shift;;
         esac
     done
+
+    # restore locale variables before executing
+    local LC_ALL=$_LC_ALL
+    local LANG=$_LANG
 
     if [[ $pipe == true ]]; then
         \eval "$cmd" < /dev/stdin
@@ -2326,9 +2482,11 @@ OPTIONS
     -s | --subdir
         Select a subdirectory in the alias path with a filter.
     
-    -n | --number {SUBDIR_NUMBER}
-        Select a subdirectory by number in the subdirectory mode
-        non-interactively.
+    -n | --number {SUBDIR_NUMBERS}
+        Select a subdirectory by number in the subdirectory mode.
+        Multiple numbers separated by commas like "1,3,6,0" are
+        used in turn as each subdirectory number.
+        Specify 0 to exit subdirectory mode at the current directory.
 
     -F | --cmd-filter {FILTER_COMMAND}
         Use a specified interactive filter.
@@ -2356,6 +2514,12 @@ OPTIONS
 
     --show-config
         Show the config file.
+
+    --reload-config
+        Reload the config file.
+    
+    --reset-config
+        Reset the config file to Defaults.
 
     --color {[auto | always | never]}
         Control error messages to be colored for pipes.
@@ -2490,7 +2654,12 @@ _cda::completion::exec()
         \setopt localoptions AUTO_PARAM_SLASH
         \setopt localoptions LIST_TYPES
     fi
-    
+
+    # reset
+    if [[ -n ${BASH_VERSION-} ]]; then
+        \complete -F _cda::completion::exec $CDA_EXEC_NAME
+    fi
+
     COMPREPLY=()
     local curr="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
@@ -2510,7 +2679,7 @@ _cda::completion::exec()
         case "$prev" in
             # options requiring no more argument
             -e | --edit | -h | --help | -H | --help-full | -L | --list-files | \
-            --version | --config)
+            --version | --config | --show-config | --reload-config | --reset-config)
                 return 0
                 ;;
             
@@ -2527,7 +2696,6 @@ _cda::completion::exec()
         
         # the user is inputting a new value
         elif [[ $prev =~ ^(-[a-zA-Z0-9]*[an]|--add|--number)$ ]] ; then
-            COMPREPLY=
             return 0
 
         # complements option name
@@ -2561,7 +2729,9 @@ _cda::completion::exec()
                 --list-paths
                 --color
                 --config
-                --show-config 
+                --show-config
+                --reload-config
+                --reset-config
                 " -- "$curr"))
             return $?
 
@@ -2579,6 +2749,9 @@ _cda::completion::exec()
 
     # complements a directory path
     if [[ $curr =~ (/|^[.~]/?) || $COMP_LINE =~ \ (-[a-zA-Z0-9]*[aA]|--add(-forced)?)\ +[a-zA-Z0-9_]+\  ]]; then
+        if [[ -n ${BASH_VERSION-} ]]; then
+            \complete -o dirnames -F _cda::completion::exec $CDA_EXEC_NAME
+        fi
         COMPREPLY=($(\compgen -- "$curr"))
         return $? 
 
@@ -2606,6 +2779,6 @@ _cda::completion::exec()
 CDA_INITIALIZED=false
 _cda
 if [[ $? -ne 0 ]]; then
-    \printf -- "cda: ERROR: Failed to initialize\n"
+    \printf -- "cda: FATAL: Failed to initialize\n" >&2
     return 1
 fi
