@@ -34,7 +34,7 @@ _cda()
     #------------------------------------------------
     # app info
     declare -r APPNAME="cda"
-    declare -r VERSION="1.5.0 (2018-07-16)"
+    declare -r VERSION="1.5.1 (2019-01-07)"
 
     # save whether the stdin/out/err of the main function is TTY or not.
     [[ -t 0 ]]
@@ -146,7 +146,7 @@ _cda()
     local Optarg_number=           # -n --number
     local Optarg_use_temp=         # -u --use-temp
     local Optarg_use=              # -U --use
-   
+
     if ! _cda::option::parse "$@"; then
         return 1
     fi
@@ -1771,7 +1771,7 @@ _cda::list::check()
 #------------------------------------------------
 _cda::utils::check_pipes()
 {
-    [[ $(_cda::num::sum ${PIPESTATUS[@]-}) -eq 0 ]]
+    [[ ${PIPESTATUS[@]:-${pipestatus[@]-}} =~ ^[0\ ]+$ ]]
 }
 
 _cda::utils::is_true()
@@ -1799,11 +1799,6 @@ _cda::num::andmatch()
     _cda::num::is_number $1 && \
     _cda::num::is_number $2 && \
     [[ $(($1 & $2)) -ne 0 ]]
-}
-
-_cda::num::sum()
-{
-    \awk '{for(i=1; i<=NF; i++){t+=$i}} END{print t}' <<< ${@-}
 }
 
 
