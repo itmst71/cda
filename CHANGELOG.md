@@ -1,8 +1,12 @@
 # Change Log
+## v1.5.1 (2019-01-24)
+* Fixed the bug that some actions looked successful in spite of error occuring in zsh
+* Fixed some small bugs
+
 ## v1.5.0 (2018-07-16)
 * Added new options --reload-config and --reset-config
 * Enhanced the subdir mode to be called recursively until tha path decided
-* Enabled to add a new alias with the subdir mode like
+* Enabled to add a new alias with the subdir mode
 * Improved Bash-Completion for zsh
 * Fixed the error when using -o to open a path with nautilus on some environments
 

@@ -21,8 +21,8 @@ _cda()
     CDA_DATA_ROOT="${CDA_DATA_ROOT:-$HOME/.cda}"
 
     # save locale variables before overriding
-    declare -r _LC_ALL=$LC_ALL
-    declare -r _LANG=$LANG
+    declare -r _LC_ALL=${LC_ALL-}
+    declare -r _LANG=${LANG-}
 
     # override system variables
     local IFS=$' \t\n'
@@ -34,7 +34,7 @@ _cda()
     #------------------------------------------------
     # app info
     declare -r APPNAME="cda"
-    declare -r VERSION="1.5.0 (2018-07-16)"
+    declare -r VERSION="1.5.1 (2019-01-24)"
 
     # save whether the stdin/out/err of the main function is TTY or not.
     [[ -t 0 ]]
@@ -146,7 +146,7 @@ _cda()
     local Optarg_number=           # -n --number
     local Optarg_use_temp=         # -u --use-temp
     local Optarg_use=              # -U --use
-   
+
     if ! _cda::option::parse "$@"; then
         return 1
     fi
@@ -355,8 +355,7 @@ _cda::setup::init()
 
     # load user config
     if [[ -f "$CONFIG_FILE" ]]; then
-        . "$CONFIG_FILE"
-        if [[ $? -ne 0 ]]; then
+        if ! . "$CONFIG_FILE"; then
             _cda::msg::error ERROR "Failed to load config: " "$CONFIG_FILE"
             return 1
         fi
@@ -376,18 +375,18 @@ _cda::setup::init()
     fi
     
     # define the function with the name of $CDA_EXEC_NAME
-    \eval "$CDA_EXEC_NAME()
+    \eval "$CDA_EXEC_NAME"'()
     {
         local tmp_argv arg
-        tmp_argv=(\"\$@\")
+        tmp_argv=("$@")
         if [[ ! -t 0 ]]; then
-            while IFS= \\read -r arg || [[ -n \"\$arg\" ]]
+            while IFS= \read -r arg || [[ -n "$arg" ]]
             do
-                tmp_argv+=(\"\$arg\")
-            done < <(\\cat -)
+                tmp_argv+=("$arg")
+            done < <(\cat -)
         fi
-        _cda \"\${tmp_argv[@]}\"
-    }"
+        _cda "${tmp_argv[@]}"
+    }'
 
     # configure Bash-Completion
     CDA_BASH_COMPLETION="${CDA_BASH_COMPLETION:-$CDA_BASH_COMPLETION_DEFAULT}"
@@ -491,20 +490,6 @@ _cda::setup::paths()
         fi
     fi
 
-    # remove .autolist
-    if [[ -f "$LIST_DIR/.autolist" ]]; then
-        if ! \rm -- "$LIST_DIR/.autolist" 2>/dev/null; then
-            _cda::msg::error WARNING "Could not remove an unnecessary file: " "$LIST_DIR/.autolist"
-        fi
-    fi
-
-    # remove .autopwd
-    if [[ -f "$LIST_DIR/.autopwd" ]]; then
-        if ! \rm -- "$LIST_DIR/.autopwd" 2>/dev/null; then
-            _cda::msg::error WARNING "Could not remove an unnecessary file: " "$LIST_DIR/.autopwd"
-        fi
-    fi
-
     return 0
 }
 
@@ -569,9 +554,9 @@ _cda::setup::use()
     while [[ $# -ne 0 ]]
     do
         case "$1" in
-            -t|--temp) temp=true; \shift;;
-            --) \shift; args+=("$@"); \break;;
-            *)  args+=("$1"); \shift;;
+            -t|--temp) temp=true; shift;;
+            --) shift; args+=("$@"); break;;
+            *)  args+=("$1"); shift;;
         esac
     done
     local list_name="${args[0]-}"
@@ -883,7 +868,7 @@ _cda::option::parse()
                         --*)    err_noarg_l+=("$optname");;
                         -*)     err_noarg_s+=("$optname");;
                     esac
-                    \shift
+                    shift
                     continue
                 fi
 
@@ -902,9 +887,9 @@ _cda::option::parse()
                 esac
                 
                 if [[ $is_split_optarg == true ]]; then
-                    \shift
+                    shift
                 else
-                    \shift 2
+                    shift 2
                 fi
                 ;;
 
@@ -932,12 +917,12 @@ _cda::option::parse()
             --reset-config \
             )
                 _cda::option::set $optname || return 1
-                \shift
+                shift
                 ;;
             --)
-                \shift
+                shift
                 Argv+=("$@")
-                \break
+                break
                 ;;
             --*)
                 if [[ "$completion" == true && ${#comp[@]} -ge 2 ]]; then
@@ -945,11 +930,11 @@ _cda::option::parse()
                 else
                     err_undef_l+=("$optname")
                 fi
-                \shift
+                shift
                 ;;
             -)
                 Argv+=("$optname")
-                \shift
+                shift
                 ;;
             -*)
                 detected_opts=
@@ -997,16 +982,16 @@ _cda::option::parse()
                            -e 's/\([^ ]\)/ -\1/g')"
 
                 err_undef_s+=($rest_opts)
-                \shift $shift_cnt
+                shift $shift_cnt
                 ;;
             '')
                 # supports a blank arg
                 Argv+=("")
-                \shift
+                shift
                 ;;
             *)
                 Argv+=("$optname") 
-                \shift
+                shift
                 ;;
         esac
     done
@@ -1043,7 +1028,7 @@ _cda::option::parse()
         rtn=1
     fi
 
-     # check incompatible options
+    # check incompatible options
     if [[ ${#Err_incompat[*]} -gt 1 ]]; then
         msg=$(<<< "${Err_incompat[*]}" \tr " " "\n" | \sed '/^$/d' | \sort | \uniq | \tr "\n" " ")
         _cda::msg::error ERROR "Incompatible Options: " "$msg"
@@ -1093,14 +1078,14 @@ _cda::alias::validate()
     while [[ $# -ne 0 ]]
     do
         case "$1" in
-            -n | --name) type=name; \shift;;
-            -l | --line) type=line; \shift;;
-            -s | --strict) strict=true; \shift;;
-            --show-error) show_error=true; \shift;;
-            -)  args+=("$1"); \shift;;
-            --) \shift; args+=("$@"); \break;;
+            -n | --name) type=name; shift;;
+            -l | --line) type=line; shift;;
+            -s | --strict) strict=true; shift;;
+            --show-error) show_error=true; shift;;
+            -)  args+=("$1"); shift;;
+            --) shift; args+=("$@"); break;;
             -*) _cda::msg::internal_error "Illegal Option: " "$1"; return 1;;
-            *)  args+=("$1"); \shift;;
+            *)  args+=("$1"); shift;;
         esac
     done
     [[ ${#args[@]} -eq 0 || -z $type ]] && return 1
@@ -1192,12 +1177,12 @@ _cda::list::print()
     while [[ $# -ne 0 ]]
     do
         case "$1" in
-            -n) names_only=true; \shift;;
-            -p) paths_only=true; \shift;;
-            -)  args+=("$1"); \shift;;
-            --) \shift; args+=("$@"); \break;;
+            -n) names_only=true; shift;;
+            -p) paths_only=true; shift;;
+            -)  args+=("$1"); shift;;
+            --) shift; args+=("$@"); break;;
             -*) _cda::msg::internal_error "Illegal Option: " "$1"; return 1;;
-            *)  args+=("$1"); \shift;;
+            *)  args+=("$1"); shift;;
         esac
     done
 
@@ -1249,12 +1234,12 @@ _cda::list::match()
     while [[ $# -ne 0 ]]
     do
         case "$1" in
-            -p) partial=true; \shift;;
-            -e) exact=true; \shift;;
-            -)  args+=("$1"); \shift;;
-            --) \shift; args+=("$@"); \break;;
+            -p) partial=true; shift;;
+            -e) exact=true; shift;;
+            -)  args+=("$1"); shift;;
+            --) shift; args+=("$@"); break;;
             -*) _cda::msg::internal_error "Illegal Option: " "$1"; return 1;;
-            *)  args+=("$1"); \shift;;
+            *)  args+=("$1"); shift;;
         esac
     done
 
@@ -1563,11 +1548,11 @@ _cda::list::check()
     while [[ $# -ne 0 ]]
     do
         case "$1" in
-            --clean) clean=true; prog_title=Cleaning; \shift;;
-            -)  args+=("$1"); \shift;;
-            --) \shift; args+=("$@"); \break;;
+            --clean) clean=true; prog_title=Cleaning; shift;;
+            -)  args+=("$1"); shift;;
+            --) shift; args+=("$@"); break;;
             -*) _cda::msg::internal_error "Illegal Option: " "$1"; return 1;;
-            *)  args+=("$1"); \shift;;
+            *)  args+=("$1"); shift;;
         esac
     done
 
@@ -1771,16 +1756,17 @@ _cda::list::check()
 #------------------------------------------------
 _cda::utils::check_pipes()
 {
-    [[ $(_cda::num::sum ${PIPESTATUS[@]-}) -eq 0 ]]
+    [[ ${PIPESTATUS[@]:-${pipestatus[@]-}} =~ ^[0\ ]+$ ]]
 }
 
 _cda::utils::is_true()
 {
-    case "$(_cda::text::lower "${1-}")" in
-        0 | true | yes | y | enabled | enable | on)     return 0;;
-        1 | false | no | n | disabled | disable | off)  return 1;;
-        *)                                              return 2;;
-    esac
+    return $(
+        [[ -n ${ZSH_VERSION-} ]] \
+        && \setopt localoptions NOCASEMATCH \
+        || \shopt -s nocasematch
+        [[ ${1-} =~ ^(0|true|yes|y|enabled|enable|on)$ ]] && echo 0 || echo 1
+    )
 }
 
 
@@ -1799,11 +1785,6 @@ _cda::num::andmatch()
     _cda::num::is_number $1 && \
     _cda::num::is_number $2 && \
     [[ $(($1 & $2)) -ne 0 ]]
-}
-
-_cda::num::sum()
-{
-    \awk '{for(i=1; i<=NF; i++){t+=$i}} END{print t}' <<< ${@-}
 }
 
 
@@ -1838,7 +1819,7 @@ _cda::dir::check()
     local show_error=false
     if [[ "${1-}" == --show-error ]]; then
         show_error=true
-        \shift
+        shift
     fi
 
     if [[ -d ${1-} && -r ${1-} && -x ${1-} ]]; then
@@ -1903,7 +1884,7 @@ _cda::dir::split_at_error()
             rtn=$rtn_permission_denied
         elif [[ -d $curr_path ]]; then
             ok_path="$curr_path"
-            \shift
+            shift
         elif [[ -f $curr_path ]]; then
             rtn=$rtn_regular_file
         else
@@ -1912,7 +1893,7 @@ _cda::dir::split_at_error()
 
         if [[ $rtn -ne 0 ]]; then
             err_path="$(_cda::text::join "/" "$@")"
-            \break
+            break
         fi
     done
     [[ $ok_path != / && ! -z $err_path ]] && ok_path="$ok_path/"
@@ -1926,12 +1907,12 @@ _cda::dir::subdirs()
     for arg in "$@"
     do
         case "$arg" in
-            -f) fullpath=true; \shift;;
-            -a) alldirs=a ; \shift;;
-            -L) nolink=true; \shift;;
-            -p) parentdir=true; \shift;;
-            --) \shift; argpath="$@"; \break;;
-            *)  argpath="$1"; \shift;;
+            -f) fullpath=true; shift;;
+            -a) alldirs=a ; shift;;
+            -L) nolink=true; shift;;
+            -p) parentdir=true; shift;;
+            --) shift; argpath="$@"; break;;
+            *)  argpath="$1"; shift;;
         esac
     done
     
@@ -2010,7 +1991,7 @@ _cda::dir::select()
         fi
 
         if [[ $dirnum -eq 0 ]]; then
-            \break
+            break
         fi
         
         if ! _cda::dir::check --show-error "$tmp_path"; then
@@ -2022,7 +2003,7 @@ _cda::dir::select()
 
         abs_path=$(_cda::path::to_abs "$tmp_path")
         if [[ $# -ne 0 ]]; then
-            \shift
+            shift
         fi
     done
     
@@ -2082,21 +2063,21 @@ _cda::text::color()
     while [[ $# -ne 0 ]]
     do
         case "$1" in
-            -B | --bold)            att=$bold; \shift;;
-            -L | --lowintensity)    att=$lowintensity; \shift;;
-            -I | --italic)          att=$italic; \shift;;
-            -U | --underline)       att=$underline; \shift;;
-            -K | --blink)           att=$blink; \shift;;
-            --fast-blink)           att=$fastblink; \shift;;
-            -R | --reverse)         att=$reverse; \shift;;
-            -V | --invisible)       att=$invisible; \shift;;
-            -S | --strike)          att=$strike; \shift;;
-            --U)                    att=$dblunderline; \shift;;
-            -H)                     att=$highintensity; \shift;;
-            -n | --newline)         newline="\n"; \shift;;
+            -B | --bold)            att=$bold; shift;;
+            -L | --lowintensity)    att=$lowintensity; shift;;
+            -I | --italic)          att=$italic; shift;;
+            -U | --underline)       att=$underline; shift;;
+            -K | --blink)           att=$blink; shift;;
+            --fast-blink)           att=$fastblink; shift;;
+            -R | --reverse)         att=$reverse; shift;;
+            -V | --invisible)       att=$invisible; shift;;
+            -S | --strike)          att=$strike; shift;;
+            --U)                    att=$dblunderline; shift;;
+            -H)                     att=$highintensity; shift;;
+            -n | --newline)         newline="\n"; shift;;
             -b | -f)
                 if [[ -z ${2+_} || ${2-} =~ ^-+ ]]; then
-                    \shift
+                    shift
                     continue
                 fi
 
@@ -2119,26 +2100,22 @@ _cda::text::color()
                         esac
                         ;;
                 esac
-                \shift 2
+                shift 2
                 ;;
-            -)  args+=("$1"); \shift;;
-            --) \shift; args+=("$@"); \break;;
+            -)  args+=("$1"); shift;;
+            --) shift; args+=("$@"); break;;
             -*) _cda::msg::internal_error "Illegal Option: " "$1"; return 1;;
             *)  args+=("$1");;
         esac
     done
 
-
     if [[ $att -eq $none && $bg -ne $bg_default ]]; then
         att=$highintensity
     fi
 
-    local text
-    if [[ ${#args[*]} -eq 0 ]]; then
-        text=$(\cat -- -)
-    else
-        text="${args[*]}"
-    fi
+    [[ ${#args[*]} -eq 0 ]] \
+    && local text=$(\cat -- -) \
+    || local text="${args[*]}"
     \printf -- "%b" "${esc_start}${bg};${att};${fg}m${text}${esc_end}${newline}"
 }
 
@@ -2164,9 +2141,9 @@ _cda::text::join()
 {
     local IFS=
     local delimiter="${1-}"
-    \shift
+    shift
     \printf -- "%s" "${1-}"
-    \shift
+    shift
     \printf -- "%s" "${@/#/$delimiter}"
 }
 
@@ -2189,19 +2166,26 @@ _cda::text::trim()
 #------------------------------------------------
 _cda::msg::should_color()
 {
-    local fd="${1-}"
-    case "$(_cda::text::lower "${Optarg_color:-${CDA_COLOR_MODE:-$CDA_COLOR_MODE_DEFAULT}}")" in
-        always)   return 0;;
-        never)    return 1;;
-        auto)     
-            case "$fd" in
-                $FD_STDOUT) return $TTY_STDOUT;;
-                $FD_STDERR) return $TTY_STDERR;;
-                *) return 1;;
-            esac
-            ;;
-        *) return 1;;
-    esac
+    local colmode=${Optarg_color:-${CDA_COLOR_MODE:-$CDA_COLOR_MODE_DEFAULT}}
+    local fd=${1-}
+    return $(
+        [[ -n ${ZSH_VERSION-} ]] \
+        && \setopt localoptions NOCASEMATCH \
+        || \shopt -s nocasematch
+        if [[ $colmode == auto ]]; then
+            if [[ $fd == $FD_STDOUT ]]; then
+                echo $TTY_STDOUT
+            elif [[ $fd == $FD_STDERR ]]; then
+                echo $TTY_STDERR
+            else
+                echo 1
+            fi
+        elif [[ $colmode == always ]]; then
+            echo 0
+        else #never and the others
+            echo 1
+        fi
+    )
 }
 
 # escape sequence filter
@@ -2225,11 +2209,11 @@ _cda::msg::error()
 
     local extra=
     if [[ $# -gt 3 ]]; then
-        \shift 3
+        shift 3
         local IFS=
         extra="$*"
         IFS=$' \t\n'
-    fi  
+    fi
 
     local col=
     case "$(_cda::text::lower "$title")" in
@@ -2255,9 +2239,9 @@ _cda::msg::internal_error()
 {
     local text="${1-}" value="${2-}" funcs
     funcs=()
-    if [[ -n $BASH_VERSION ]]; then
+    if [[ -n ${BASH_VERSION-} ]]; then
         funcs=("${FUNCNAME[@]}")
-    elif [[ -n ZSH_VERSION ]]; then
+    elif [[ -n ${ZSH_VERSION-} ]]; then
         funcs=("${funcstack[@]}")
     fi
     _cda::msg::error "INTERNAL ERROR" "${funcs[1]}(): $text" "$value"
@@ -2315,17 +2299,17 @@ _cda::cmd::exec()
 {
     local cmd="$(_cda::cmd::get "${1-}")"
     [[ -z $cmd ]] && return $RTN_COMMAND_NOT_FOUND
-    \shift
+    shift
     local args pipe=false
     args=()
     while [[ $# -ne 0 ]]
     do
         case "$1" in
-            -p|--pipe) pipe=true; \shift;;
-            -)  args+=("$1"); \shift;;
-            --) \shift; args+=("$@"); \break;;
+            -p|--pipe) pipe=true; shift;;
+            -)  args+=("$1"); shift;;
+            --) shift; args+=("$@"); break;;
             -*) _cda::msg::internal_error "Illegal Option: " "$1"; return 1;;
-            *)  args+=("$1"); \shift;;
+            *)  args+=("$1"); shift;;
         esac
     done
 
@@ -2352,11 +2336,11 @@ _cda::help::show()
     while [[ $# -ne 0 ]]
     do
         case "$1" in
-            -s|--short) short=true; \shift;;
-            -)  args+=("$1"); \shift;;
-            --) \shift; args+=("$@"); \break;;
+            -s|--short) short=true; shift;;
+            -)  args+=("$1"); shift;;
+            --) shift; args+=("$@"); break;;
             -*) _cda::msg::internal_error "Illegal Option: " "$1"; return 1;;
-            *)  args+=("$1"); \shift;;
+            *)  args+=("$1"); shift;;
         esac
     done
 
@@ -2670,7 +2654,7 @@ _cda::completion::exec()
         [[ $idx -eq $COMP_CWORD ]] && break
         if [[ $arg == -- ]] ; then
             optEnd=true
-            \break
+            break
         fi
         : $((idx++))
     done
@@ -2777,8 +2761,7 @@ _cda::completion::exec()
 #------------------------------------------------
 # set CDA_INITIALIZED as false and call once the main function to initialize
 CDA_INITIALIZED=false
-_cda
-if [[ $? -ne 0 ]]; then
-    \printf -- "cda: FATAL: Failed to initialize\n" >&2
+if ! _cda; then
+    \printf >&2 -- "%s\n" "cda: FATAL: Failed to initialize"
     return 1
 fi
